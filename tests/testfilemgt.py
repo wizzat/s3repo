@@ -38,6 +38,10 @@ class FileManagementTest(unittest.TestCase):
     def test_expire_flags_record(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
+    def test_local_path(self):
+        pass
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -3,7 +3,7 @@ import unittest
 
 class DestroyTest(unittest.TestCase):
     @unittest.skip("---- Unwritten ----")
-    def test_errors_if_does_not_exist(self):
+    def test_does_not_error_if_does_not_exist(self):
         repo = S3Repo()
         repo.destroy_repository()
 

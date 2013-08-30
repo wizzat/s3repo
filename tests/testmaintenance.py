@@ -11,6 +11,14 @@ class MaintenanceTest(unittest.TestCase):
         pass
 
     @unittest.skip("---- Unwritten ----")
+    def test_never_published_files_get_flushed(self):
+        pass
+
+    @unittest.skip("---- Unwritten ----")
+    def test_cache_purge_using_atime(self):
+        pass
+
+    @unittest.skip("---- Unwritten ----")
     def test_restore_from_backup(self):
         pass
 
