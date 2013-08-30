@@ -6,27 +6,35 @@ class FileManagementTest(unittest.TestCase):
     def test_add_file_copies_file_into_local_cache(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_add_file_creates_repo_record(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_publish_file_flags_repo_record(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_publish_uploads_file(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_upload_puts_files_on_s3(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_upload_stores_md5(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_upload_stores_file_size(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_lock_for_processing(self):
         pass
 
+    @unittest.skip("---- Unwritten ----")
     def test_expire_flags_record(self):
         pass
 
