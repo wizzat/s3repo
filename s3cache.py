@@ -4,30 +4,36 @@ import json
 import shutil
 import psycopg2
 import md5
+from boto.s3.key import Key
 from pyutil.pghelper import table_exists, execute, sql_where_from_params
 from dbtable import DBTable
 
 class RepoAlreadyExistsError(Exception): pass
 class RepoFileNotUploadedError(Exception): pass
+class PurgingPublishedRecordError(Exception): pass
 
 class S3Repo(object):
     def __init__(self):
-        self.config = json.load(os.environ['S3CACHE_CONFIG'])
-        self.conn   = psycopg2.connect(**config['database'])
+        self.s3_buckets = {}
+        self.config     = json.load(os.environ['S3CACHE_CONFIG'])
+        self.db_conn    = psycopg2.connect(**config['database'])
+        self.s3_conn    = boto.connect_s3(
+            self.config['s3_access_key'],
+            self.config['s3_secret_key'],
+        )
 
-        self.setup_repo_file()
-
-    def setup_repo_file(self):
         class RepoFile(_RepoFile):
-            conn = self.conn
+            db_conn = self.db_conn
+            s3_conn = self.s3_conn
+            s3_repo = self
         self.RepoFile = RepoFile
 
     def create_repository(self):
-        if table_exists(self.conn, "s3_objects"):
+        if table_exists(self.db_conn, "s3_objects"):
             raise RepoAlreadyExistsError()
 
-        self.conn.execute("CREATE SEQUENCE s3_obj_seq")
-        self.conn.execute("""
+        execute(self.db_conn, "CREATE SEQUENCE s3_obj_seq")
+        execute(self.db_conn, """
             CREATE TABLE s3_objects (
                 file_no          INTEGER default nextval('s3_obj_seq'),
                 s3_bucket        VARCHAR(64),
@@ -43,16 +49,17 @@ class S3Repo(object):
                 published        BOOLEAN DEFAULT FALSE
         """)
 
-        self.conn.execute("CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_objects (s3_bucket, s3_key)")
+        execute(self.db_conn, "CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_objects (s3_bucket, s3_key)")
 
     def destroy_repository(self):
-        self.conn.execute("drop table if exists s3_objects");
-        self.conn.commit()
+        execute(self.db_conn, "DROP TABLE IF EXISTS s3_objects")
+        self.db_conn.commit()
+
         try:
-            self.conn.execute("drop sequence s3_obj_seq");
-            self.conn.commit()
+            execute(self.db_conn, "DROP SEQUENCE s3_obj_seq")
+            self.db_conn.commit()
         except psycopg2.ProgrammingError:
-            self.conn.rollback()
+            self.db_conn.rollback()
 
     def create_file_from_local(self, local_path, s3_bucket = None, s3_key = None):
         s3_bucket = s3_bucket or self.config['default_s3_bucket']
@@ -63,7 +70,9 @@ class S3Repo(object):
 class _RepoFile(DBTable):
     table_name = 'repo_files'
     key_field  = 'file_no'
-    fields = (
+    db_conn    = None
+    s3_conn    = None
+    fields     = (
         'file_no',
         's3_bucket',
         's3_key',
@@ -101,6 +110,11 @@ class _RepoFile(DBTable):
         if os.path.exists(self.local_path()) and not self.date_uploaded:
             self.date_uploaded = now()
             self.set_file_stats()
+        self.bucket().delete_key(Key(self.bucket(), key))
+
+    def purge(self):
+        if self.published:
+            raise PurgingPublishedRecordError()
 
     def set_file_stats(self):
         self.file_size = os.stat(self.local_path()).st_size

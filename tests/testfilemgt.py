@@ -39,6 +39,14 @@ class FileManagementTest(unittest.TestCase):
         pass
 
     @unittest.skip("---- Unwritten ----")
+    def test_purge_removes_from_s3(self):
+        pass
+
+    @unittest.skip("---- Unwritten ----")
+    def test_purge_raises_error_if_published_file(self):
+        pass
+
+    @unittest.skip("---- Unwritten ----")
     def test_local_path(self):
         pass
 
