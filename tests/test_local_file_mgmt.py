@@ -1,7 +1,7 @@
+import unittest, tempfile
 from s3cache import S3Repo
 from pyutil.testutil import *
 from testcase import *
-import unittest
 
 class RemoteFileMgmtTest(DBTestCase):
     @skip_offline
@@ -24,10 +24,48 @@ class RemoteFileMgmtTest(DBTestCase):
     def test_purge_removes_from_s3(self):
         pass
 
-class LocalFileMgmtTest(DBTestCase):
+    @skip_offline
     @skip_unfinished
-    def test_add_file_copies_file_into_local_cache(self):
+    def test_expired_records_purged_from_s3(self):
         pass
+
+
+class LocalFileMgmtTest(DBTestCase):
+    def test_add_file_moves_file_into_local_cache(self):
+        filename = None
+        with tempfile.NamedTemporaryFile(delete = False) as fp:
+            fp.write("herro!\n")
+            fp.flush()
+
+            self.assertTrue(os.path.exists(fp.name))
+
+            repo = S3Repo()
+            repo.create_repository()
+            rf = repo.add_local_file(fp.name)
+            repo.commit()
+
+            self.assertFalse(os.path.exists(fp.name))
+            self.assertTrue(os.path.exists(rf.local_path()))
+            self.assertEqual(slurp(rf.local_path()), "herro!\n")
+
+    def test_add_file_copies_file_into_local_cache(self):
+        filename = None
+        with tempfile.NamedTemporaryFile(delete = True) as fp:
+            fp.write("herro!\n")
+            fp.flush()
+
+            self.assertTrue(os.path.exists(fp.name))
+
+            repo = S3Repo()
+            repo.create_repository()
+            rf = repo.add_local_file(fp.name, move = False)
+            repo.commit()
+
+            self.assertTrue(os.path.exists(fp.name))
+            self.assertTrue(os.path.exists(rf.local_path()))
+            self.assertEqual(slurp(fp.name), "herro!\n")
+            self.assertEqual(slurp(rf.local_path()), "herro!\n")
+
 
     @skip_unfinished
     def test_add_file_creates_repo_record(self):

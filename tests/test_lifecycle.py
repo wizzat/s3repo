@@ -33,10 +33,6 @@ class LifecycleTest(DBTestCase):
         self.assertFalse(table_exists(self.conn, "s3_objects"))
 
     @unittest.skip("---- Unwritten ----")
-    def test_expired_records_purged_from_s3(self):
-        pass
-
-    @unittest.skip("---- Unwritten ----")
     def test_expired_records_are_kept_until_repo_backup(self):
         pass
 

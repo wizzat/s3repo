@@ -1,8 +1,8 @@
+import unittest, psycopg2, json, os, s3cache, shutil
 from s3cache import S3Repo
 from pyutil.pghelper import *
 from pyutil.testutil import *
 from pyutil.util import *
-import unittest, psycopg2, json, os, s3cache
 
 class DBTestCase(unittest.TestCase, AssertSQLMixin):
     conn = None
@@ -10,6 +10,8 @@ class DBTestCase(unittest.TestCase, AssertSQLMixin):
         super(DBTestCase, self).setUp()
         if not self.conn:
             config = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
+            mkdirp(config['local_root'])
+            shutil.rmtree(config['local_root'])
             self.conn = psycopg2.connect(**config['database'])
 
         execute(self.conn, "DROP TABLE IF EXISTS s3_objects")
@@ -26,4 +28,3 @@ class DBTestCase(unittest.TestCase, AssertSQLMixin):
         if self.conn:
             self.conn.commit()
             self.conn.close()
-            self.conn = None

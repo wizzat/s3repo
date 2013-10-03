@@ -1,16 +1,16 @@
-import boto
-import os
+import os, shutil, md5, uuid, socket
 import json
-import shutil
 import psycopg2
-import md5
+import boto
 from boto.s3.key import Key
 from pyutil.pghelper import *
 from pyutil.util import *
 
-class RepoAlreadyExistsError(Exception): pass
-class RepoFileNotUploadedError(Exception): pass
-class PurgingPublishedRecordError(Exception): pass
+class RepoError(Exception): pass
+class RepoAlreadyExistsError(RepoError): pass
+class RepoFileNotUploadedError(RepoError): pass
+class RepoFileAlreadyExistsError(RepoError): pass
+class PurgingPublishedRecordError(RepoError): pass
 
 class S3Repo(object):
     def __init__(self):
@@ -23,9 +23,11 @@ class S3Repo(object):
         )
 
         class RepoFile(_RepoFile):
-            db_conn = self.db_conn
-            s3_conn = self.s3_conn
-            s3_repo = self
+            local_root = self.config['local_root']
+            conn       = self.db_conn
+            s3_conn    = self.s3_conn
+            s3_repo    = self
+
         self.RepoFile = RepoFile
 
     def create_repository(self):
@@ -44,6 +46,7 @@ class S3Repo(object):
                 date_created     TIMESTAMP DEFAULT now(),
                 date_uploaded    TIMESTAMP,
                 date_published   TIMESTAMP,
+                date_backed_up   TIMESTAMP,
                 date_expired     TIMESTAMP,
                 attributes       HSTORE,
                 published        BOOLEAN DEFAULT FALSE
@@ -63,14 +66,41 @@ class S3Repo(object):
         except psycopg2.ProgrammingError:
             self.db_conn.rollback()
 
-    def create_file_from_local(self, local_path, s3_bucket = None, s3_key = None):
-        s3_bucket = s3_bucket or self.config['default_s3_bucket']
-        remote_key = remote_key or str(uuid.uuid4())
+        return self
 
-        rf = self.RepoFile(s3_bucket, s3_key)
+    def add_local_file(self, local_path, s3_key = None, s3_bucket = None, move = True, **attributes):
+        s3_bucket = s3_bucket or self.config['default_s3_bucket']
+        s3_key = s3_key or os.path.basename(local_path)
+        rf = self.add_file(s3_key, s3_bucket, **attributes)
+
+        mkdirp(os.path.dirname(rf.local_path()))
+        if move:
+            shutil.move(local_path, rf.local_path())
+        else:
+            shutil.copy(local_path, rf.local_path())
+
+        return rf
+
+    def add_file(self, s3_key = None, s3_bucket = None, **attributes):
+        s3_bucket = s3_bucket or self.config['default_s3_bucket']
+        s3_key = s3_key or str(uuid.uuid4())
+
+        rf = list(self.RepoFile.find_by(s3_key = s3_key, s3_bucket = s3_bucket))
+        if rf:
+            raise RepoFileAlreadyExistsError(repr(rf))
+
+        return self.RepoFile(
+            s3_bucket    = s3_bucket,
+            s3_key       = s3_key,
+            origin       = socket.gethostname(),
+            attributes   = attributes,
+        ).insert()
+
+    def commit(self):
+        self.db_conn.commit()
 
 class _RepoFile(DBTable):
-    table_name = 'repo_files'
+    table_name = 's3_objects'
     key_field  = 'file_no'
     db_conn    = None
     s3_conn    = None
@@ -85,6 +115,7 @@ class _RepoFile(DBTable):
         'date_created',
         'date_uploaded',
         'date_published',
+        'date_backed_up',
         'date_expired',
         'attributes',
     )
@@ -137,3 +168,11 @@ class _RepoFile(DBTable):
         Returns a file pointer to the current file.
         """
         pass
+
+    def __repr__(self):
+        return "RepoFile(s3://{s3_bucket}/{s3_key} ( {origin}:{local_path} )".format(
+            s3_bucket = self.s3_bucket,
+            s3_key = self.s3_key,
+            origin = self.origin,
+            local_path = self.local_path(),
+        )
