@@ -1,15 +1,25 @@
 from s3cache import S3Repo
-import unittest
+from pyutil.testutil import *
+from pyutil.util import *
+import unittest, psycopg2, json, os
 
 class CreateTest(unittest.TestCase):
-    @unittest.skip("---- Unwritten ----")
+    conn = None
+    def setUp(self):
+        super(CreateTest, self).setUp()
+        if not self.conn:
+            config = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
+            self.conn = psycopg2.connect(**config['database'])
+
     def test_creates(self):
         repo = S3Repo()
         repo.create_repository()
 
-    @unittest.skip("---- Unwritten ----")
     def test_errors_if_already_exists(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        with self.assertRaises(psycopg2.ProgrammingError):
+            repo.create_repository()
 
 if __name__ == '__main__':
     unittest.main()

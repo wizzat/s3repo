@@ -5,8 +5,8 @@ import shutil
 import psycopg2
 import md5
 from boto.s3.key import Key
-from pyutil.pghelper import table_exists, execute, sql_where_from_params
-from dbtable import DBTable
+from pyutil.pghelper import *
+from pyutil.util import *
 
 class RepoAlreadyExistsError(Exception): pass
 class RepoFileNotUploadedError(Exception): pass
@@ -15,8 +15,8 @@ class PurgingPublishedRecordError(Exception): pass
 class S3Repo(object):
     def __init__(self):
         self.s3_buckets = {}
-        self.config     = json.load(os.environ['S3CACHE_CONFIG'])
-        self.db_conn    = psycopg2.connect(**config['database'])
+        self.config     = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
+        self.db_conn    = psycopg2.connect(**self.config['database'])
         self.s3_conn    = boto.connect_s3(
             self.config['s3_access_key'],
             self.config['s3_secret_key'],
@@ -47,9 +47,11 @@ class S3Repo(object):
                 date_expired     TIMESTAMP,
                 attributes       HSTORE,
                 published        BOOLEAN DEFAULT FALSE
+            )
         """)
 
         execute(self.db_conn, "CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_objects (s3_bucket, s3_key)")
+        self.db_conn.commit()
 
     def destroy_repository(self):
         execute(self.db_conn, "DROP TABLE IF EXISTS s3_objects")
