@@ -5,6 +5,16 @@ import boto
 from boto.s3.key import Key
 from pyutil.pghelper import *
 from pyutil.util import *
+from pyutil.dateutil import *
+
+__all__ = [
+    'RepoError',
+    'RepoAlreadyExistsError',
+    'RepoFileNotUploadedError',
+    'RepoFileAlreadyExistsError',
+    'PurgingPublishedRecordError',
+    'S3Repo',
+]
 
 class RepoError(Exception): pass
 class RepoAlreadyExistsError(RepoError): pass
@@ -94,7 +104,7 @@ class S3Repo(object):
             s3_key       = s3_key,
             origin       = socket.gethostname(),
             attributes   = attributes,
-        ).insert()
+        ).update()
 
     def commit(self):
         self.db_conn.commit()
@@ -128,7 +138,7 @@ class _RepoFile(DBTable):
         )
 
     def publish(self):
-        if self.expired or not self.published:
+        if self.date_expired or not self.published:
             self.published = True
             self.date_expired = None
             self.date_published = now()
@@ -143,11 +153,20 @@ class _RepoFile(DBTable):
         if os.path.exists(self.local_path()) and not self.date_uploaded:
             self.date_uploaded = now()
             self.set_file_stats()
-        self.bucket().delete_key(Key(self.bucket(), key))
+
+        if not os.environ.get('OFFLINE', False):
+            # Actually push to S3
+            pass
 
     def purge(self):
         if self.published:
             raise PurgingPublishedRecordError()
+
+        assert len(self.delete()) ==  1
+
+        if not os.environ.get('OFFLINE', False):
+            # Actually delete from S3
+            pass
 
     def set_file_stats(self):
         self.file_size = os.stat(self.local_path()).st_size
@@ -167,6 +186,7 @@ class _RepoFile(DBTable):
         """
         Returns a file pointer to the current file.
         """
+        self.download()
         pass
 
     def __repr__(self):

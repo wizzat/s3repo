@@ -1,6 +1,7 @@
 import unittest, tempfile
-from s3cache import S3Repo
+from s3cache import *
 from pyutil.testutil import *
+from pyutil.dateutil import *
 from testcase import *
 
 class RemoteFileMgmtTest(DBTestCase):
@@ -28,7 +29,6 @@ class RemoteFileMgmtTest(DBTestCase):
     @skip_unfinished
     def test_expired_records_purged_from_s3(self):
         pass
-
 
 class LocalFileMgmtTest(DBTestCase):
     def test_add_file_moves_file_into_local_cache(self):
@@ -65,15 +65,70 @@ class LocalFileMgmtTest(DBTestCase):
             self.assertTrue(os.path.exists(rf.local_path()))
             self.assertEqual(slurp(fp.name), "herro!\n")
             self.assertEqual(slurp(rf.local_path()), "herro!\n")
+            repo.commit()
 
-
-    @skip_unfinished
     def test_add_file_creates_repo_record(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        repo.add_file(s3_bucket = '1', s3_key = '1')
+        repo.add_file(s3_bucket = '1', s3_key = '2')
+        repo.add_file(s3_bucket = '2', s3_key = '1')
+        repo.add_file(s3_bucket = '2', s3_key = '3')
+        repo.commit()
 
-    @skip_unfinished
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_objects
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_bucket',  's3_key',  ],
+            [ '1',          '1',       ],
+            [ '1',          '2',       ],
+            [ '2',          '1',       ],
+            [ '2',          '3',       ],
+        )
+
+    def test_add_file_refuses_to_create_existing_file(self):
+        repo = S3Repo()
+        repo.create_repository()
+        repo.add_file(s3_bucket = '1', s3_key = '1')
+        with self.assertRaises(RepoFileAlreadyExistsError):
+            repo.add_file(s3_bucket = '1', s3_key = '1')
+        repo.commit()
+
     def test_publish_file_flags_repo_record(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file(s3_bucket = '1', s3_key = '1')
+        rf2 = repo.add_file(s3_bucket = '1', s3_key = '2')
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_objects
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_bucket',  's3_key',  'published',  'date_published',  ],
+            [ '1',          '1',       False,        None,              ],
+            [ '1',          '2',       False,        None,              ],
+        )
+
+        rf1.publish()
+        rf2.publish()
+        rf1.update()
+        rf2.update()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_objects
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_bucket',  's3_key',  'published',  'date_published',  ],
+            [ '1',          '1',       True,         now(),             ],
+            [ '1',          '2',       True,         now(),             ],
+        )
+
 
     @skip_unfinished
     def test_upload_stores_file_size(self):
