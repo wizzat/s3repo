@@ -113,10 +113,11 @@ class LocalFileMgmtTest(DBTestCase):
             [ '1',          '2',       False,        None,              ],
         )
 
+        rf1.touch()
+        rf2.touch()
+
         rf1.publish()
         rf2.publish()
-        rf1.update()
-        rf2.update()
         repo.commit()
 
         self.assertSqlResults(self.conn, """
@@ -128,7 +129,6 @@ class LocalFileMgmtTest(DBTestCase):
             [ '1',          '1',       True,         now(),             ],
             [ '1',          '2',       True,         now(),             ],
         )
-
 
     @skip_unfinished
     def test_upload_stores_file_size(self):

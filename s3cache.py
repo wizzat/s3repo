@@ -20,6 +20,7 @@ class RepoError(Exception): pass
 class RepoAlreadyExistsError(RepoError): pass
 class RepoFileNotUploadedError(RepoError): pass
 class RepoFileAlreadyExistsError(RepoError): pass
+class RepoFileDoesNotExistLocallyError(RepoError): pass
 class PurgingPublishedRecordError(RepoError): pass
 
 class S3Repo(object):
@@ -51,7 +52,7 @@ class S3Repo(object):
                 s3_bucket        VARCHAR(64),
                 s3_key           VARCHAR(1024),
                 origin           VARCHAR(256),
-                md5              VARCHAR(16),
+                md5              VARCHAR(32),
                 file_size        INTEGER,
                 date_created     TIMESTAMP DEFAULT now(),
                 date_uploaded    TIMESTAMP,
@@ -143,6 +144,7 @@ class _RepoFile(DBTable):
             self.date_expired = None
             self.date_published = now()
         self.upload()
+        self.update()
 
     def expire(self):
         self.published = False
@@ -150,13 +152,18 @@ class _RepoFile(DBTable):
             self.date_expired = now()
 
     def upload(self):
-        if os.path.exists(self.local_path()) and not self.date_uploaded:
-            self.date_uploaded = now()
-            self.set_file_stats()
+        if self.date_uploaded:
+            return
 
+        if not os.path.exists(self.local_path()):
+            raise RepoFileDoesNotExistLocallyError()
+
+        self.set_file_stats()
         if not os.environ.get('OFFLINE', False):
             # Actually push to S3
             pass
+
+        self.date_uploaded = now()
 
     def purge(self):
         if self.published:
@@ -181,13 +188,22 @@ class _RepoFile(DBTable):
         """
         if not self.date_uploaded:
             raise RepoFileNotUploadedError()
+        if os.path.exists(self.local_path()):
+            return
 
     def open(self):
         """
         Returns a file pointer to the current file.
         """
         self.download()
-        pass
+
+    def touch(self):
+        """
+        Ensures the repo file exists.
+        """
+        mkdirp(os.path.dirname(self.local_path()))
+        with open(self.local_path(), 'a') as fp:
+            fp.flush()
 
     def __repr__(self):
         return "RepoFile(s3://{s3_bucket}/{s3_key} ( {origin}:{local_path} )".format(

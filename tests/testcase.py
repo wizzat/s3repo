@@ -3,11 +3,13 @@ from s3cache import S3Repo
 from pyutil.pghelper import *
 from pyutil.testutil import *
 from pyutil.util import *
+from pyutil.dateutil import *
 
 class DBTestCase(unittest.TestCase, AssertSQLMixin):
     conn = None
     def setUp(self):
         super(DBTestCase, self).setUp()
+        set_now(now())
         if not self.conn:
             config = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
             mkdirp(config['local_root'])
