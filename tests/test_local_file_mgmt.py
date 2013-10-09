@@ -71,22 +71,24 @@ class LocalFileMgmtTest(DBTestCase):
     def test_add_file_creates_repo_record(self):
         repo = S3Repo()
         repo.create_repository()
-        repo.add_file(s3_bucket = '1', s3_key = '1')
-        repo.add_file(s3_bucket = '1', s3_key = '2')
-        repo.add_file(s3_bucket = '2', s3_key = '1')
-        repo.add_file(s3_bucket = '2', s3_key = '3')
+        rf1 = repo.add_file(s3_bucket = '1', s3_key = '1')
+        rf2 = repo.add_file(s3_bucket = '1', s3_key = '2')
+        rf3 = repo.add_file(s3_bucket = '2', s3_key = '1')
+        rf4 = repo.add_file(s3_bucket = '2', s3_key = '3')
         repo.commit()
+
+        self.assertEqual(len({ x.file_no for x in [ rf1, rf2, rf3, rf4 ] }), 4)
 
         self.assertSqlResults(self.conn, """
             SELECT *
             FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
-            [ 's3_bucket',  's3_key',  ],
-            [ '1',          '1',       ],
-            [ '1',          '2',       ],
-            [ '2',          '1',       ],
-            [ '2',          '3',       ],
+            [ 'file_no',    's3_bucket',  's3_key',  ],
+            [ rf1.file_no,  '1',          '1',       ],
+            [ rf2.file_no,  '1',          '2',       ],
+            [ rf3.file_no,  '2',          '1',       ],
+            [ rf4.file_no,  '2',          '3',       ],
         )
 
     def test_add_file_refuses_to_create_existing_file(self):
@@ -100,8 +102,8 @@ class LocalFileMgmtTest(DBTestCase):
     def test_publish_file_flags_repo_record(self):
         repo = S3Repo()
         repo.create_repository()
-        rf1 = repo.add_file(s3_bucket = '1', s3_key = '1')
-        rf2 = repo.add_file(s3_bucket = '1', s3_key = '2')
+        rf1 = repo.add_file(s3_key = '1')
+        rf2 = repo.add_file(s3_key = '2')
         repo.commit()
 
         self.assertSqlResults(self.conn, """
@@ -109,9 +111,9 @@ class LocalFileMgmtTest(DBTestCase):
             FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
-            [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',  'file_size',  ],
-            [ '1',          '1',       False,        None,              None,   None,         ],
-            [ '1',          '2',       False,        None,              None,   None,         ],
+            [ 's3_key',  'published',  'date_published',  'md5',  'file_size',  ],
+            [ '1',       False,        None,              None,   None,         ],
+            [ '2',       False,        None,              None,   None,         ],
         )
 
         f1_contents = "yakkety yak, don't talk back"
@@ -123,7 +125,6 @@ class LocalFileMgmtTest(DBTestCase):
         with open(rf2.local_path(), 'w') as fp:
             fp.write(f2_contents)
 
-
         rf1.publish()
         rf2.publish()
         repo.commit()
@@ -133,9 +134,9 @@ class LocalFileMgmtTest(DBTestCase):
             FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
-            [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',                             'file_size',       ],
-            [ '1',          '1',       True,         now(),             md5.md5(f1_contents).hexdigest(),  len(f1_contents),  ],
-            [ '1',          '2',       True,         now(),             md5.md5(f2_contents).hexdigest(),  len(f2_contents),  ],
+            [ 's3_key',  'published',  'date_published',  'md5',                             'file_size',       ],
+            [ '1',       True,         now(),             md5.md5(f1_contents).hexdigest(),  len(f1_contents),  ],
+            [ '2',       True,         now(),             md5.md5(f2_contents).hexdigest(),  len(f2_contents),  ],
         )
 
     def test_expire_flags_record(self):
@@ -180,7 +181,26 @@ class LocalFileMgmtTest(DBTestCase):
         repo.commit()
         self.assertEqual(rf.local_path(), '/mnt/s3repo/abc/def')
 
-    @skip_unfinished
     def test_lock_for_processing(self):
-        pass
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_key = 'unpublished')
+        repo.commit()
+        rf1.lock_for_processing()
+        rf1.lock_for_processing()
 
+        with self.assertRaises(psycopg2.OperationalError):
+            execute(self.conn, "select * from s3_repo for update nowait")
+        repo.commit()
+
+    def test_find_by_delegation(self):
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_bucket = '1', s3_key = 'f1')
+        rf2 = repo.add_file(s3_bucket = '1', s3_key = 'f2')
+        rf3 = repo.add_file(s3_bucket = '1', s3_key = 'f3')
+        rf4 = repo.add_file(s3_bucket = '2', s3_key = 'f4')
+
+        self.assertEqual({ x.file_no for x in repo.find_by(s3_key = 'f2') }, { rf2.file_no })
+        self.assertEqual({ x.file_no for x in repo.find_by(s3_bucket = '1') }, { rf1.file_no, rf2.file_no, rf3.file_no })
+        self.assertEqual({ x.file_no for x in repo.find_by(s3_bucket = '2') }, { rf4.file_no })
+        self.assertEqual({ x.file_no for x in repo.find_by(s3_bucket = '3') }, set())
+        repo.commit()

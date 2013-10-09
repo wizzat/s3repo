@@ -40,6 +40,9 @@ class S3Repo(object):
             s3_repo    = self
 
         self.RepoFile = RepoFile
+        self.commit = self.db_conn.commit
+        self.rollback = self.db_conn.rollback
+        self.find_by = self.RepoFile.find_by
 
     def create_repository(self):
         if table_exists(self.db_conn, "s3_repo"):
@@ -129,9 +132,6 @@ class S3Repo(object):
         Recursively examines config['local_root'] and unlinks files which have been accessed more than config['local_atime_limit'] minutes ago.
         """
         raise NotImplemented()
-
-    def commit(self):
-        self.db_conn.commit()
 
 class _RepoFile(DBTable):
     table_name = 's3_repo'
