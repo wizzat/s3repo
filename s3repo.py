@@ -63,7 +63,7 @@ class S3Repo(object):
                 date_published   TIMESTAMP,
                 date_backed_up   TIMESTAMP,
                 date_expired     TIMESTAMP,
-                attributes       HSTORE,
+                attributes       JSON,
                 published        BOOLEAN DEFAULT FALSE
             )
         """)
@@ -112,7 +112,7 @@ class S3Repo(object):
 
     def backup_db(self):
         """
-        Creates a backup of the S3 Cache and uploads it to config['backup_s3_bucket']/s3cache_backups
+        Creates a backup of the S3 Cache and uploads it to config['backup_s3_bucket']/s3repo_backups
         Backup name will be: "YYYY-MM-DD_HH:24:MI:SS.sql.gz"
         Ensures that no more than config['num_backups'] exist.
         """
@@ -120,7 +120,7 @@ class S3Repo(object):
 
     def restore_db(self):
         """
-        Queries config['backup_s3_bucket']/s3cache_backups and restores the latest backup.
+        Queries config['backup_s3_bucket']/s3repo_backups and restores the latest backup.
         """
         raise NotImplemented()
 

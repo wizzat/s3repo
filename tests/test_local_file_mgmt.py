@@ -1,5 +1,5 @@
 import unittest, tempfile, md5, zlib
-from s3cache import *
+from s3repo import *
 from pyutil.testutil import *
 from pyutil.dateutil import *
 from pyutil.util import *
@@ -178,7 +178,7 @@ class LocalFileMgmtTest(DBTestCase):
         repo = S3Repo().create_repository()
         rf = repo.add_file(s3_bucket = 'abc', s3_key = 'def')
         repo.commit()
-        self.assertEqual(rf.local_path(), '/mnt/s3cache/abc/def')
+        self.assertEqual(rf.local_path(), '/mnt/s3repo/abc/def')
 
     @skip_unfinished
     def test_lock_for_processing(self):

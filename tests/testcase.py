@@ -1,5 +1,5 @@
-import unittest, psycopg2, json, os, s3cache, shutil
-from s3cache import S3Repo
+import unittest, psycopg2, json, os, s3repo, shutil
+from s3repo import S3Repo
 from pyutil.pghelper import *
 from pyutil.testutil import *
 from pyutil.util import *

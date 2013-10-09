@@ -1,9 +1,9 @@
-from s3cache import S3Repo
+from s3repo import S3Repo
 from testcase import DBTestCase
 from pyutil.pghelper import *
 from pyutil.testutil import *
 from pyutil.util import *
-import unittest, psycopg2, json, os, s3cache
+import unittest, psycopg2, json, os, s3repo
 
 class LifecycleTest(DBTestCase):
     def test_creates(self):
@@ -13,7 +13,7 @@ class LifecycleTest(DBTestCase):
     def test_errors_if_already_exists(self):
         repo = S3Repo()
         repo.create_repository()
-        with self.assertRaises(s3cache.RepoAlreadyExistsError):
+        with self.assertRaises(s3repo.RepoAlreadyExistsError):
             repo.create_repository()
 
     def test_does_not_error_if_does_not_exist(self):
