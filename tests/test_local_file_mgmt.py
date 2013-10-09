@@ -138,11 +138,6 @@ class LocalFileMgmtTest(DBTestCase):
             [ '1',          '2',       True,         now(),             md5.md5(f2_contents).hexdigest(),  len(f2_contents),  ],
         )
 
-    @skip_unfinished
-    def test_lock_for_processing(self):
-        pass
-
-    @skip_unfinished
     def test_expire_flags_record(self):
         repo = S3Repo().create_repository()
         rf1 = repo.add_file(s3_key = 'unpublished')
@@ -157,21 +152,35 @@ class LocalFileMgmtTest(DBTestCase):
         rf3.publish()
         rf1.expire()
         rf2.expire()
+        repo.commit()
 
         self.assertSqlResults(self.conn, """
             SELECT *
             FROM s3_objects
             ORDER BY s3_bucket, s3_key
         """,
-            [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',  'file_size',  ],
-            [ '1',          '1',       False,        None,              None,   None,         ],
-            [ '1',          '2',       False,        None,              None,   None,         ],
+            [ 's3_key',       'published',  'date_published',  'date_expired',  ],
+            [ 'control',      True,         now(),             None,            ],
+            [ 'published',    False,        now(),             now(),           ],
+            [ 'unpublished',  False,        None,              now(),           ],
         )
 
-    @skip_unfinished
     def test_purge_raises_error_if_published_file(self):
-        pass
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_key = 'unpublished')
+        rf1.touch()
+        rf1.publish()
+        with self.assertRaises(PurgingPublishedRecordError):
+            rf1.purge()
+        repo.commit()
+
+    def test_local_path(self):
+        repo = S3Repo().create_repository()
+        rf = repo.add_file(s3_bucket = 'abc', s3_key = 'def')
+        repo.commit()
+        self.assertEqual(rf.local_path(), '/mnt/s3cache/abc/def')
 
     @skip_unfinished
-    def test_local_path(self):
+    def test_lock_for_processing(self):
         pass
+
