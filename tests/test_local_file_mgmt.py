@@ -1,7 +1,8 @@
-import unittest, tempfile
+import unittest, tempfile, md5, zlib
 from s3cache import *
 from pyutil.testutil import *
 from pyutil.dateutil import *
+from pyutil.util import *
 from testcase import *
 
 class RemoteFileMgmtTest(DBTestCase):
@@ -108,13 +109,20 @@ class LocalFileMgmtTest(DBTestCase):
             FROM s3_objects
             ORDER BY s3_bucket, s3_key
         """,
-            [ 's3_bucket',  's3_key',  'published',  'date_published',  ],
-            [ '1',          '1',       False,        None,              ],
-            [ '1',          '2',       False,        None,              ],
+            [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',  'file_size',  ],
+            [ '1',          '1',       False,        None,              None,   None,         ],
+            [ '1',          '2',       False,        None,              None,   None,         ],
         )
 
-        rf1.touch()
-        rf2.touch()
+        f1_contents = "yakkety yak, don't talk back"
+        f2_contents = zlib.compress("take out the papers and the trash")
+        mkdirp(os.path.dirname(rf1.local_path()))
+        with open(rf1.local_path(), 'w') as fp:
+            fp.write(f1_contents)
+
+        with open(rf2.local_path(), 'w') as fp:
+            fp.write(f2_contents)
+
 
         rf1.publish()
         rf2.publish()
@@ -125,14 +133,10 @@ class LocalFileMgmtTest(DBTestCase):
             FROM s3_objects
             ORDER BY s3_bucket, s3_key
         """,
-            [ 's3_bucket',  's3_key',  'published',  'date_published',  ],
-            [ '1',          '1',       True,         now(),             ],
-            [ '1',          '2',       True,         now(),             ],
+            [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',                             'file_size',       ],
+            [ '1',          '1',       True,         now(),             md5.md5(f1_contents).hexdigest(),  len(f1_contents),  ],
+            [ '1',          '2',       True,         now(),             md5.md5(f2_contents).hexdigest(),  len(f2_contents),  ],
         )
-
-    @skip_unfinished
-    def test_upload_stores_file_size(self):
-        pass
 
     @skip_unfinished
     def test_lock_for_processing(self):
@@ -140,7 +144,29 @@ class LocalFileMgmtTest(DBTestCase):
 
     @skip_unfinished
     def test_expire_flags_record(self):
-        pass
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_key = 'unpublished')
+        rf2 = repo.add_file(s3_key = 'published')
+        rf3 = repo.add_file(s3_key = 'control')
+
+        rf1.touch()
+        rf2.touch()
+        rf3.touch()
+
+        rf2.publish()
+        rf3.publish()
+        rf1.expire()
+        rf2.expire()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_objects
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',  'file_size',  ],
+            [ '1',          '1',       False,        None,              None,   None,         ],
+            [ '1',          '2',       False,        None,              None,   None,         ],
+        )
 
     @skip_unfinished
     def test_purge_raises_error_if_published_file(self):

@@ -1,4 +1,4 @@
-import os, shutil, md5, uuid, socket
+import os, shutil, md5, uuid, socket, subprocess, gzip
 import json
 import psycopg2
 import boto
@@ -45,6 +45,10 @@ class S3Repo(object):
         if table_exists(self.db_conn, "s3_objects"):
             raise RepoAlreadyExistsError()
 
+        # Create the s3 bucket
+        if not os.environ.get('OFFLINE', False):
+            pass
+
         execute(self.db_conn, "CREATE SEQUENCE s3_obj_seq")
         execute(self.db_conn, """
             CREATE TABLE s3_objects (
@@ -66,6 +70,7 @@ class S3Repo(object):
 
         execute(self.db_conn, "CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_objects (s3_bucket, s3_key)")
         self.db_conn.commit()
+        return self
 
     def destroy_repository(self):
         execute(self.db_conn, "DROP TABLE IF EXISTS s3_objects")
@@ -76,8 +81,6 @@ class S3Repo(object):
             self.db_conn.commit()
         except psycopg2.ProgrammingError:
             self.db_conn.rollback()
-
-        return self
 
     def add_local_file(self, local_path, s3_key = None, s3_bucket = None, move = True, **attributes):
         s3_bucket = s3_bucket or self.config['default_s3_bucket']
@@ -106,6 +109,26 @@ class S3Repo(object):
             origin       = socket.gethostname(),
             attributes   = attributes,
         ).update()
+
+    def backup_db(self):
+        """
+        Creates a backup of the S3 Cache and uploads it to config['backup_s3_bucket']/s3cache_backups
+        Backup name will be: "YYYY-MM-DD_HH:24:MI:SS.sql.gz"
+        Ensures that no more than config['num_backups'] exist.
+        """
+        raise NotImplemented()
+
+    def restore_db(self):
+        """
+        Queries config['backup_s3_bucket']/s3cache_backups and restores the latest backup.
+        """
+        raise NotImplemented()
+
+    def cleanup_local_disk(self):
+        """
+        Recursively examines config['local_root'] and unlinks files which have been accessed more than config['local_atime_limit'] minutes ago.
+        """
+        raise NotImplemented()
 
     def commit(self):
         self.db_conn.commit()
@@ -150,6 +173,7 @@ class _RepoFile(DBTable):
         self.published = False
         if not self.date_expired:
             self.date_expired = now()
+        self.update()
 
     def upload(self):
         if self.date_uploaded:
@@ -177,10 +201,7 @@ class _RepoFile(DBTable):
 
     def set_file_stats(self):
         self.file_size = os.stat(self.local_path()).st_size
-
-        with open(self.local_path(), 'r') as fp:
-            data = fp.read()
-            self.md5 = md5.md5(data).hexdigest()
+        self.md5 = subprocess.check_output([ "md5", "-q", self.local_path() ])[:-1]
 
     def download(self):
         """
@@ -196,6 +217,10 @@ class _RepoFile(DBTable):
         Returns a file pointer to the current file.
         """
         self.download()
+        if self.s3_key.endswith(".gz"):
+            return gzip.open(self.local_path(), 'r')
+        else:
+            return open(self.local_path(), 'r')
 
     def touch(self):
         """
