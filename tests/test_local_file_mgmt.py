@@ -79,7 +79,7 @@ class LocalFileMgmtTest(DBTestCase):
 
         self.assertSqlResults(self.conn, """
             SELECT *
-            FROM s3_objects
+            FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
             [ 's3_bucket',  's3_key',  ],
@@ -106,7 +106,7 @@ class LocalFileMgmtTest(DBTestCase):
 
         self.assertSqlResults(self.conn, """
             SELECT *
-            FROM s3_objects
+            FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
             [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',  'file_size',  ],
@@ -130,7 +130,7 @@ class LocalFileMgmtTest(DBTestCase):
 
         self.assertSqlResults(self.conn, """
             SELECT *
-            FROM s3_objects
+            FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
             [ 's3_bucket',  's3_key',  'published',  'date_published',  'md5',                             'file_size',       ],
@@ -156,7 +156,7 @@ class LocalFileMgmtTest(DBTestCase):
 
         self.assertSqlResults(self.conn, """
             SELECT *
-            FROM s3_objects
+            FROM s3_repo
             ORDER BY s3_bucket, s3_key
         """,
             [ 's3_key',       'published',  'date_published',  'date_expired',  ],

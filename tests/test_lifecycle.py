@@ -21,7 +21,7 @@ class LifecycleTest(DBTestCase):
         repo.create_repository()
         repo.destroy_repository()
 
-        self.assertFalse(table_exists(self.conn, "s3_objects"))
+        self.assertFalse(table_exists(self.conn, "s3_repo"))
 
         repo.destroy_repository()
 
@@ -30,7 +30,7 @@ class LifecycleTest(DBTestCase):
         repo.create_repository()
         repo.destroy_repository()
 
-        self.assertFalse(table_exists(self.conn, "s3_objects"))
+        self.assertFalse(table_exists(self.conn, "s3_repo"))
 
     @skip_unfinished
     def test_expired_records_are_kept_until_repo_backup(self):

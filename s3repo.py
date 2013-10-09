@@ -42,17 +42,17 @@ class S3Repo(object):
         self.RepoFile = RepoFile
 
     def create_repository(self):
-        if table_exists(self.db_conn, "s3_objects"):
+        if table_exists(self.db_conn, "s3_repo"):
             raise RepoAlreadyExistsError()
 
         # Create the s3 bucket
         if not os.environ.get('OFFLINE', False):
             pass
 
-        execute(self.db_conn, "CREATE SEQUENCE s3_obj_seq")
+        execute(self.db_conn, "CREATE SEQUENCE s3_repo_seq")
         execute(self.db_conn, """
-            CREATE TABLE s3_objects (
-                file_no          INTEGER default nextval('s3_obj_seq'),
+            CREATE TABLE s3_repo (
+                file_no          INTEGER default nextval('s3_repo_seq'),
                 s3_bucket        VARCHAR(64),
                 s3_key           VARCHAR(1024),
                 origin           VARCHAR(256),
@@ -68,16 +68,16 @@ class S3Repo(object):
             )
         """)
 
-        execute(self.db_conn, "CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_objects (s3_bucket, s3_key)")
+        execute(self.db_conn, "CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_repo (s3_bucket, s3_key)")
         self.db_conn.commit()
         return self
 
     def destroy_repository(self):
-        execute(self.db_conn, "DROP TABLE IF EXISTS s3_objects")
+        execute(self.db_conn, "DROP TABLE IF EXISTS s3_repo")
         self.db_conn.commit()
 
         try:
-            execute(self.db_conn, "DROP SEQUENCE s3_obj_seq")
+            execute(self.db_conn, "DROP SEQUENCE s3_repo_seq")
             self.db_conn.commit()
         except psycopg2.ProgrammingError:
             self.db_conn.rollback()
@@ -134,7 +134,7 @@ class S3Repo(object):
         self.db_conn.commit()
 
 class _RepoFile(DBTable):
-    table_name = 's3_objects'
+    table_name = 's3_repo'
     key_field  = 'file_no'
     db_conn    = None
     s3_conn    = None

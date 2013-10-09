@@ -16,11 +16,11 @@ class DBTestCase(unittest.TestCase, AssertSQLMixin):
             shutil.rmtree(config['local_root'])
             self.conn = psycopg2.connect(**config['database'])
 
-        execute(self.conn, "DROP TABLE IF EXISTS s3_objects")
+        execute(self.conn, "DROP TABLE IF EXISTS s3_repo")
         self.conn.commit()
 
         try:
-            execute(self.conn, "DROP SEQUENCE s3_obj_seq")
+            execute(self.conn, "DROP SEQUENCE s3_repo_seq")
             self.conn.commit()
         except psycopg2.ProgrammingError:
             self.conn.commit()
