@@ -33,14 +33,6 @@ class LifecycleTest(DBTestCase):
 
         self.assertFalse(table_exists(self.conn, "s3_repo"))
 
-    @skip_unfinished
-    def test_expired_records_are_kept_until_repo_backup(self):
-        pass
-
-    @skip_unfinished
-    def test_timelimit_for_deleting_unpublished_files(self):
-        pass
-
     def test_never_published_files_get_flushed(self):
         repo = S3Repo()
         repo.create_repository()
@@ -106,6 +98,35 @@ class LifecycleTest(DBTestCase):
         self.assertFalse(os.path.exists(rf2.local_path()))
         self.assertTrue(os.path.exists(rf3.local_path()))
         repo.commit()
+
+    def test_timelimit_for_deleting_unpublished_files(self):
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file(s3_key = "abc")
+        rf2 = repo.add_file(s3_key = "def")
+        rf3 = repo.add_file(s3_key = "ghi")
+
+        dt = now() - weeks(1) - seconds(2)
+        for i, rf in enumerate([ rf1, rf2, rf3 ]):
+            rf.touch()
+            rf.date_created = dt + seconds(i)
+            rf.update()
+
+        repo.cleanup_unpublished_files()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 'file_no',    ],
+            [ rf3.file_no,  ],
+        )
+
+    @skip_unfinished
+    def test_expired_records_are_kept_until_repo_backup(self):
+        pass
 
     @skip_unfinished
     def test_cache_purge_using_atime(self):
