@@ -127,6 +127,16 @@ class S3Repo(object):
         """
         raise NotImplemented()
 
+    def cleanup_unpublished_files(self):
+        """
+        Purges local files which have not been published
+        """
+        unpublished_files = self.find_by(origin = socket.gethostname(), published = False, date_published = None)
+
+        for rf in unpublished_files:
+            if rf.date_created < now() - weeks(1):
+                rf.purge()
+
     def cleanup_local_disk(self):
         """
         Recursively examines config['local_root'] and unlinks files which have been accessed more than config['local_atime_limit'] minutes ago.
@@ -198,6 +208,7 @@ class _RepoFile(DBTable):
         if not os.environ.get('OFFLINE', False):
             # Actually delete from S3
             pass
+        swallow(OSError, lambda: os.unlink(self.local_path()))
 
     def set_file_stats(self):
         self.file_size = os.stat(self.local_path()).st_size
