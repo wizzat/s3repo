@@ -27,7 +27,8 @@ class S3Repo(object):
     def __init__(self):
         self.s3_buckets = {}
         self.config     = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
-        self.db_conn    = psycopg2.connect(**self.config['database'])
+        self.db_mgr     = ConnMgr(**self.config['database'])
+        self.db_conn    = self.db_mgr.getconn("conn")
         self.s3_conn    = boto.connect_s3(
             self.config['s3_access_key'],
             self.config['s3_secret_key'],
@@ -58,15 +59,16 @@ class S3Repo(object):
                 file_no          INTEGER default nextval('s3_repo_seq'),
                 s3_bucket        VARCHAR(64),
                 s3_key           VARCHAR(1024),
+                file_type        VARCHAR(64),
+                period           TIMESTAMP,
                 origin           VARCHAR(256),
                 md5              VARCHAR(32),
                 file_size        INTEGER,
                 date_created     TIMESTAMP DEFAULT now(),
                 date_uploaded    TIMESTAMP,
                 date_published   TIMESTAMP,
-                date_backed_up   TIMESTAMP,
+                date_archived    TIMESTAMP,
                 date_expired     TIMESTAMP,
-                attributes       JSON,
                 published        BOOLEAN DEFAULT FALSE
             )
         """)
@@ -85,10 +87,10 @@ class S3Repo(object):
         except psycopg2.ProgrammingError:
             self.db_conn.rollback()
 
-    def add_local_file(self, local_path, s3_key = None, s3_bucket = None, move = True, **attributes):
+    def add_local_file(self, local_path, s3_key = None, s3_bucket = None, move = True, **kwargs):
         s3_bucket = s3_bucket or self.config['default_s3_bucket']
         s3_key = s3_key or os.path.basename(local_path)
-        rf = self.add_file(s3_key, s3_bucket, **attributes)
+        rf = self.add_file(s3_key, s3_bucket, **kwargs)
 
         mkdirp(os.path.dirname(rf.local_path()))
         if move:
@@ -98,7 +100,7 @@ class S3Repo(object):
 
         return rf
 
-    def add_file(self, s3_key = None, s3_bucket = None, **attributes):
+    def add_file(self, s3_key = None, s3_bucket = None, **kwargs):
         s3_bucket = s3_bucket or self.config['default_s3_bucket']
         s3_key = s3_key or str(uuid.uuid4())
 
@@ -107,10 +109,10 @@ class S3Repo(object):
             raise RepoFileAlreadyExistsError(repr(rf))
 
         return self.RepoFile(
-            s3_bucket    = s3_bucket,
-            s3_key       = s3_key,
-            origin       = socket.gethostname(),
-            attributes   = attributes,
+            s3_bucket = s3_bucket,
+            s3_key    = s3_key,
+            origin    = socket.gethostname(),
+            **kwargs
         ).update()
 
     def backup_db(self):
@@ -152,6 +154,8 @@ class _RepoFile(DBTable):
         'file_no',
         's3_bucket',
         's3_key',
+        'file_type',
+        'period',
         'published',
         'origin',
         'md5',
@@ -159,9 +163,8 @@ class _RepoFile(DBTable):
         'date_created',
         'date_uploaded',
         'date_published',
-        'date_backed_up',
+        'date_archived',
         'date_expired',
-        'attributes',
     )
 
     def local_path(self):
@@ -223,15 +226,15 @@ class _RepoFile(DBTable):
         if os.path.exists(self.local_path()):
             return
 
-    def open(self):
+    def open(self, mode='r'):
         """
         Returns a file pointer to the current file.
         """
         self.download()
         if self.s3_key.endswith(".gz"):
-            return gzip.open(self.local_path(), 'r')
+            return gzip.open(self.local_path(), mode)
         else:
-            return open(self.local_path(), 'r')
+            return open(self.local_path(), mode)
 
     def touch(self):
         """

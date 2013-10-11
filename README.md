@@ -43,9 +43,6 @@ Published files are active and available for use.
 ##### Expired #####
 Expired files have been deleted and are no longer necessary.  They are still in S3.
 
-##### Purged #####
-Purged files have been removed from S3 and will shortly be removed from the database and all local caches.
-
 The goal of this project is to use S3 as a stateful file repository.  As such, it supports state (Unpublished, Published, Expired, Purged) for each file as well as metadata collection.  Files are cached locally
 The goal of this project is to use S3 as a file repository with a distributed local cache.
 This project is in development.  Don't use it.
@@ -69,26 +66,28 @@ An example S3CACHE\_CONFIG
         }
     }
 
-Desired 0.1 Features:
+Desired Features:
+- Documentation
+    - Python API
+    - Console commands
+    - Disaster Recovery whitepaper
+- Add files to repo
+    - Create new local files [ Done ]
+    - Copy local files[ Done ]
+    - Move local files[ Done ]
+- Store file metadaata
+    - Origin host [ Done ]
+    - File size [ Done ]
+    - MD5 upload verification [ Done ]
 - File State Management
-    - States: Unpublished/Published/Expired/Purged
-    - Origin host
-    - File size
-    - md5 upload verification
-
-
-- Create file repository in S3 [ Done ]
-- Add file to repository
-- Flag files as published or expired
-- Find published files for file type and/or date
-- Lock a row for processing
-- Use HStore for semistructured data (like date, etc)
-- md5 hash checking with S3
-
-Desired 1.0 Features:
-- Dump DB state into S3
-- Restore DB state from S3
-- Remove data from S3 that is unpublished and backed up
-
-Desired 1.1 Features:
+    - States: Unpublished/Published/Expired [ Done ]
+    - States: Local/Uploaded [ Done ]
+    - States: Fresh/Archived
+- Row level repo locks to signal processing [ Done ]
+- Upload files to S3
+    - Check md5 hash with S3 on upload
+- Disaster Recovery
+    - Dump DB state into S3 via copy files
+    - Restore DB state from S3 via copy files
+    - Purge S3 of data that is not in database
 - Cost cutting via Glacier integration

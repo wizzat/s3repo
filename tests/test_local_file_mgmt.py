@@ -185,8 +185,8 @@ class LocalFileMgmtTest(DBTestCase):
         repo = S3Repo().create_repository()
         rf1 = repo.add_file(s3_key = 'unpublished')
         repo.commit()
-        rf1.lock_for_processing()
-        rf1.lock_for_processing()
+        rf1.rowlock()
+        rf1.rowlock()
 
         with self.assertRaises(psycopg2.OperationalError):
             execute(self.conn, "select * from s3_repo for update nowait")
@@ -204,3 +204,92 @@ class LocalFileMgmtTest(DBTestCase):
         self.assertEqual({ x.file_no for x in repo.find_by(s3_bucket = '2') }, { rf4.file_no })
         self.assertEqual({ x.file_no for x in repo.find_by(s3_bucket = '3') }, set())
         repo.commit()
+
+    def test_publishing_an_expired_file(self):
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_key = 'f1')
+        rf2 = repo.add_file(s3_key = 'f2')
+
+        for rf in [ rf1, rf2 ]:
+            rf.touch()
+            rf.publish()
+            rf.expire()
+            rf.update()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_key',  'published',  'date_published',  'date_expired',  ],
+            [ 'f1',      False,        now(),             now(),           ],
+            [ 'f2',      False,        now(),             now(),           ],
+        )
+
+        rf1.publish()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_key',  'published',  'date_published',  'date_expired',  ],
+            [ 'f1',      True,         now(),             None,            ],
+            [ 'f2',      False,        now(),             now(),           ],
+        )
+
+    def test_expiring_unpublished_file(self):
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_key = 'f1')
+        rf2 = repo.add_file(s3_key = 'f2')
+        rf1.touch()
+        rf1.expire()
+
+        rf2.touch()
+        rf2.publish()
+        rf2.expire()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_key',  'published',  'date_published',  'date_expired',  ],
+            [ 'f1',      False,        None,              now(),           ],
+            [ 'f2',      False,        now(),             now(),           ],
+        )
+
+    def test_republishing_published_files_does_not_change_date_published(self):
+        t1 = now()
+        repo = S3Repo().create_repository()
+        rf1 = repo.add_file(s3_key = 'f1')
+        rf2 = repo.add_file(s3_key = 'f2')
+        rf3 = repo.add_file(s3_key = 'f3')
+
+        for rf in [ rf1, rf2 ]:
+            rf.touch()
+            rf.publish()
+        repo.commit()
+
+        t1 = now()
+        reset_now()
+        t2 = now()
+
+        rf2.publish()
+        rf3.touch()
+        rf3.publish()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 's3_key',  'published',  'date_published',  ],
+            [ 'f1',      True,         t1,                ],
+            [ 'f2',      True,         t1,                ],
+            [ 'f3',      True,         t2,                ],
+        )
