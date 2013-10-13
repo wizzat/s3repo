@@ -124,18 +124,53 @@ class LifecycleTest(DBTestCase):
             [ rf3.file_no,  ],
         )
 
+    def test_save_backup(self):
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file(s3_key = "abc")
+        rf2 = repo.add_file(s3_key = "bcd")
+        rf3 = repo.add_file(s3_key = "cde")
+        rf4 = repo.backup_db()
+        repo.commit()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 'file_no',    's3_bucket',    's3_key',    'published',    'date_published',    'file_size',    ],
+            [ rf1.file_no,  rf1.s3_bucket,  rf1.s3_key,  rf1.published,  rf1.date_published,  rf1.file_size,  ],
+            [ rf2.file_no,  rf2.s3_bucket,  rf2.s3_key,  rf2.published,  rf2.date_published,  rf2.file_size,  ],
+            [ rf3.file_no,  rf3.s3_bucket,  rf3.s3_key,  rf3.published,  rf3.date_published,  rf3.file_size,  ],
+            [ rf4.file_no,  rf4.s3_bucket,  rf4.s3_key,  True,           now(),               rf4.file_size,  ],
+        )
+
     @skip_unfinished
-    def test_expired_records_are_kept_until_repo_backup(self):
-        pass
+    def test_restore_from_backup(self):
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file(s3_key = "abc")
+        rf2 = repo.add_file(s3_key = "bcd")
+        rf3 = repo.add_file(s3_key = "cde")
+        rf4 = repo.backup_db()
+        repo.destroy()
+
+        repo = S3Repo()
+        repo.restore_db()
+
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_repo
+            ORDER BY s3_bucket, s3_key
+        """,
+            [ 'file_no',    's3_bucket',    's3_key',    'published',    'date_published',    'file_size',    ],
+            [ rf1.file_no,  rf1.s3_bucket,  rf1.s3_key,  rf1.published,  rf1.date_published,  rf1.file_size,  ],
+            [ rf2.file_no,  rf2.s3_bucket,  rf2.s3_key,  rf2.published,  rf2.date_published,  rf2.file_size,  ],
+            [ rf3.file_no,  rf3.s3_bucket,  rf3.s3_key,  rf3.published,  rf3.date_published,  rf3.file_size,  ],
+            [ rf4.file_no,  rf4.s3_bucket,  rf4.s3_key,  True,           now(),               rf4.file_size,  ],
+        )
 
     @skip_unfinished
     def test_cache_purge_using_atime(self):
         pass
 
-    @skip_unfinished
-    def test_restore_from_backup(self):
-        pass
-
-    @skip_unfinished
-    def test_save_backup(self):
-        pass

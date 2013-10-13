@@ -2,25 +2,31 @@ import os, shutil, md5, uuid, socket, subprocess, gzip
 import json
 import psycopg2
 import boto
-from boto.s3.key import Key
+from boto.s3.key import Key, compute_md5
 from pyutil.pghelper import *
 from pyutil.util import *
 from pyutil.dateutil import *
+from pyutil.decorators import *
 
 __all__ = [
     'RepoError',
     'RepoAlreadyExistsError',
     'RepoFileNotUploadedError',
     'RepoFileAlreadyExistsError',
+    'RepoDownloadError',
+    'RepoUploadError',
     'PurgingPublishedRecordError',
     'S3Repo',
 ]
 
 class RepoError(Exception): pass
 class RepoAlreadyExistsError(RepoError): pass
+class RepoNoBackupsError(RepoError): pass
 class RepoFileNotUploadedError(RepoError): pass
 class RepoFileAlreadyExistsError(RepoError): pass
 class RepoFileDoesNotExistLocallyError(RepoError): pass
+class RepoUploadError(RepoError): pass
+class RepoDownloadError(RepoError): pass
 class PurgingPublishedRecordError(RepoError): pass
 
 class S3Repo(object):
@@ -38,7 +44,6 @@ class S3Repo(object):
             local_root = self.config['local_root']
             conn       = self.db_conn
             s3_conn    = self.s3_conn
-            s3_repo    = self
 
         self.RepoFile = RepoFile
         self.commit = self.db_conn.commit
@@ -49,10 +54,6 @@ class S3Repo(object):
         if table_exists(self.db_conn, "s3_repo"):
             raise RepoAlreadyExistsError()
 
-        # Create the s3 bucket
-        if not os.environ.get('OFFLINE', False):
-            pass
-
         execute(self.db_conn, "CREATE SEQUENCE s3_repo_seq")
         execute(self.db_conn, """
             CREATE TABLE s3_repo (
@@ -61,8 +62,9 @@ class S3Repo(object):
                 s3_key           VARCHAR(1024),
                 file_type        VARCHAR(64),
                 period           TIMESTAMP,
-                origin           VARCHAR(256),
-                md5              VARCHAR(32),
+                origin           TEXT,
+                md5              TEXT,
+                b64              TEXT,
                 file_size        INTEGER,
                 date_created     TIMESTAMP DEFAULT now(),
                 date_uploaded    TIMESTAMP,
@@ -121,12 +123,37 @@ class S3Repo(object):
         Backup name will be: "YYYY-MM-DD_HH:24:MI:SS.sql.gz"
         Ensures that no more than config['num_backups'] exist.
         """
-        raise NotImplemented()
+        backup_file = self.add_file(
+            s3_bucket = self.config['backup_s3_bucket'],
+            s3_key = now().strftime("s3repo_backups/%Y-%m-%d_%H:%M:%S.sql.gz"),
+        )
+
+        with backup_file.open('w') as fp:
+            self.db_conn.cursor().copy_to(fp, 's3_repo', columns = self.RepoFile.fields)
+
+        backup_file.publish()
+
+        return backup_file
 
     def restore_db(self):
         """
         Queries config['backup_s3_bucket']/s3repo_backups and restores the latest backup.
         """
+        backup_bucket = self.s3_conn.get_bucket(config['backup_s3_bucket'])
+        remote_backup_files = backup_bucket.list("s3repo_backups/")
+
+        try:
+            last_backup = sorted(remote_backup_files, key=lambda x: x.name)[-1]
+        except IndexError:
+            raise RepoNoBackupsError()
+
+        rf = self.add_file(
+            s3_bucket = config['backup_s3_bucket'],
+            s3_key = last_backup.name,
+        )
+
+        last_backup.get_contents_to_filename(rf.local_path())
+
         raise NotImplemented()
 
     def cleanup_unpublished_files(self):
@@ -159,6 +186,7 @@ class _RepoFile(DBTable):
         'published',
         'origin',
         'md5',
+        'b64',
         'file_size',
         'date_created',
         'date_uploaded',
@@ -166,6 +194,9 @@ class _RepoFile(DBTable):
         'date_archived',
         'date_expired',
     )
+
+    def s3_path(self):
+        return "s3://{}/{}".format(self.s3_bucket, self.s3_key)
 
     def local_path(self):
         return os.path.join(
@@ -195,10 +226,14 @@ class _RepoFile(DBTable):
         if not os.path.exists(self.local_path()):
             raise RepoFileDoesNotExistLocallyError()
 
-        self.set_file_stats()
-        if not os.environ.get('OFFLINE', False):
-            # Actually push to S3
-            pass
+        if not self.file_size:
+            with open(self.local_path(), 'r') as fp:
+                self.md5, self.b64, self.file_size = compute_md5(fp)
+
+        if is_online():
+            remote_bucket = self.s3_conn.get_bucket(self.s3_bucket)
+            remote_key = Key(remote_bucket, self.s3_key)
+            remote_key.set_contents_from_filename(self.local_path(), md5=(self.md5, self.b64, self.file_size))
 
         self.date_uploaded = now()
 
@@ -208,14 +243,12 @@ class _RepoFile(DBTable):
 
         assert len(self.delete()) ==  1
 
-        if not os.environ.get('OFFLINE', False):
-            # Actually delete from S3
-            pass
-        swallow(OSError, lambda: os.unlink(self.local_path()))
+        if is_online():
+            remote_bucket = self.s3_conn.get_bucket(self.s3_bucket)
+            remote_key = Key(remote_bucket, self.s3_key)
+            remote_bucket.delete_key(remote_key)
 
-    def set_file_stats(self):
-        self.file_size = os.stat(self.local_path()).st_size
-        self.md5 = subprocess.check_output([ "md5", "-q", self.local_path() ])[:-1]
+        swallow(OSError, lambda: os.unlink(self.local_path()))
 
     def download(self):
         """
@@ -223,14 +256,29 @@ class _RepoFile(DBTable):
         """
         if not self.date_uploaded:
             raise RepoFileNotUploadedError()
+
         if os.path.exists(self.local_path()):
             return
+
+        assert_online()
+
+        remote_key = Key(self.s3_conn.get_bucket(self.s3_bucket), self.s3_key)
+        remote_key.get_contents_to_filename(self.local_path())
+
+        if self.md5:
+            real_md5 = subprocess.check_output([ "md5", "-q", self.local_path() ])[:-1]
+            if real_md5 != self.md5:
+                raise RepoDownloadError()
 
     def open(self, mode='r'):
         """
         Returns a file pointer to the current file.
         """
-        self.download()
+        if mode == 'r' and self.date_uploaded:
+            self.download()
+        elif mode == 'w':
+            mkdirp(os.path.dirname(self.local_path()))
+
         if self.s3_key.endswith(".gz"):
             return gzip.open(self.local_path(), mode)
         else:
@@ -245,9 +293,8 @@ class _RepoFile(DBTable):
             fp.flush()
 
     def __repr__(self):
-        return "RepoFile(s3://{s3_bucket}/{s3_key} ( {origin}:{local_path} )".format(
-            s3_bucket = self.s3_bucket,
-            s3_key = self.s3_key,
-            origin = self.origin,
+        return "RepoFile({s3_path} ( {origin}:{local_path} )".format(
+            s3_path    = self.s3_path(),
             local_path = self.local_path(),
+            origin     = self.origin,
         )

@@ -1,4 +1,4 @@
-import unittest, tempfile, md5, zlib
+import unittest, tempfile, md5, zlib, base64
 from s3repo import *
 from pyutil.testutil import *
 from pyutil.dateutil import *
@@ -6,30 +6,71 @@ from pyutil.util import *
 from testcase import *
 
 class RemoteFileMgmtTest(DBTestCase):
+    requires_online = True
+
     @skip_offline
-    @skip_unfinished
     def test_publish_uploads_file(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file()
+        rf1.touch()
+        rf1.publish()
+
+        bucket = self.s3_conn.get_bucket(self.config['default_s3_bucket'])
+        self.assertEqual({ x.name for x in bucket.list() }, { rf1.s3_key })
 
     @skip_offline
-    @skip_unfinished
     def test_upload_puts_files_on_s3(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file()
+        rf1.touch()
+        rf1.upload()
+
+        bucket = self.s3_conn.get_bucket(self.config['default_s3_bucket'])
+        self.assertEqual({ x.name for x in bucket.list() }, { rf1.s3_key })
 
     @skip_offline
-    @skip_unfinished
     def test_upload_stores_md5(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file()
+
+        contents = 'something bad goes here\n'
+        with rf1.open('w') as fp:
+            fp.write(contents)
+
+        rf1.upload()
+        self.assertEqual(rf1.md5, md5.md5(contents).hexdigest())
+        self.assertEqual(rf1.b64, base64.b64encode(md5.md5(contents).digest()))
+        self.assertEqual(rf1.file_size, len(contents))
 
     @skip_offline
-    @skip_unfinished
+    def test_download_checks_md5(self):
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file(md5 = md5.md5('something bad goes here').hexdigest())
+        rf1.touch()
+        rf1.upload()
+
+        os.unlink(rf1.local_path())
+        rf1.md5 = 'abc'
+        rf1.update()
+
+        with self.assertRaises(RepoDownloadError):
+            rf1.download()
+
+    @skip_offline
     def test_purge_removes_from_s3(self):
-        pass
+        repo = S3Repo()
+        repo.create_repository()
+        rf1 = repo.add_file()
+        rf1.touch()
+        rf1.upload()
+        rf1.purge()
 
-    @skip_offline
-    @skip_unfinished
-    def test_expired_records_purged_from_s3(self):
-        pass
+        bucket = self.s3_conn.get_bucket(self.config['default_s3_bucket'])
+        self.assertEqual([ x.name for x in bucket.list() ], [])
 
 class LocalFileMgmtTest(DBTestCase):
     def test_add_file_moves_file_into_local_cache(self):
