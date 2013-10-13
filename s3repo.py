@@ -124,8 +124,10 @@ class S3Repo(object):
         Ensures that no more than config['num_backups'] exist.
         """
         backup_file = self.add_file(
-            s3_bucket = self.config['backup_s3_bucket'],
-            s3_key = now().strftime("s3repo_backups/%Y-%m-%d_%H:%M:%S.sql.gz"),
+            s3_bucket      = self.config['backup_s3_bucket'],
+            s3_key         = now().strftime("s3repo_backups/%Y%m%d%H%M%S.sql.gz"),
+            date_published = now(),
+            published      = True,
         )
 
         with backup_file.open('w') as fp:
@@ -139,22 +141,35 @@ class S3Repo(object):
         """
         Queries config['backup_s3_bucket']/s3repo_backups and restores the latest backup.
         """
-        backup_bucket = self.s3_conn.get_bucket(config['backup_s3_bucket'])
-        remote_backup_files = backup_bucket.list("s3repo_backups/")
+        backup_bucket = self.s3_conn.get_bucket(self.config['backup_s3_bucket'])
+        remote_backup_files = backup_bucket.list("s3repo_backups")
+        self.create_repository()
 
         try:
             last_backup = sorted(remote_backup_files, key=lambda x: x.name)[-1]
         except IndexError:
             raise RepoNoBackupsError()
 
-        rf = self.add_file(
-            s3_bucket = config['backup_s3_bucket'],
-            s3_key = last_backup.name,
+        local_path = os.path.join(
+            self.config['local_root'],
+            self.config['backup_s3_bucket'],
+            last_backup.name,
         )
 
-        last_backup.get_contents_to_filename(rf.local_path())
+        last_backup.get_contents_to_filename(local_path)
 
-        raise NotImplemented()
+        with gzip.open(local_path, 'r') as fp:
+            self.db_conn.cursor().copy_from(fp, 's3_repo', columns = self.RepoFile.fields)
+
+        rf = list(self.RepoFile.find_by(
+            s3_bucket = self.config['backup_s3_bucket'],
+            s3_key    = last_backup.name,
+        ))[0]
+        rf.file_size = -1
+        rf.update()
+
+        self.db_conn.commit()
+        return last_backup
 
     def cleanup_unpublished_files(self):
         """
