@@ -151,6 +151,8 @@ class LifecycleTest(DBTestCase):
 
 class LifecycleRemoteTest(DBTestCase):
     requires_online = True
+
+    @skip_offline
     def test_restore_from_backup(self):
         import time
         repo = S3Repo()

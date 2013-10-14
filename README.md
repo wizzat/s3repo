@@ -1,6 +1,68 @@
 S3Repo
 =======
-S3Repo is a versioned file repository backed by Amazon S3.
+S3Repo is a Python library for turning Amazon S3 into a distributed file repository.  Key features include:
+- Flagging files as "published", which means that they should be available for consumption by the application
+- Flagging files as "expired", which means they are no longer available for consumption by the application
+- Metadata verification of interactions with S3 (md5, file size)
+- Eventual garbage collection of unpublished and expired files
+- Simple backup and restore
+- Local caches for accessed files to prevent re-downloading needed data.
+
+The official repository is located at http://www.github.com/wizzat/s3repo.
+
+Wish List:
+- File Permissions
+
+#### Getting Started ####
+
+Create a PostgreSQL database
+Create a S3Repo Configuration file.  It will look something like this (we'll go into the options later):
+    {
+        "local_root" : "/mnt/s3repo",
+        "default_s3_bucket" : "s3repo-test-bucket",
+        "backup_s3_bucket"  : "s3repo-test-bucket",
+        "s3_access_key" : "some-key",
+        "s3_secret_key" : "some-secret",
+        "database" : {
+            "host"     : "localhost",
+            "port"     : 5432,
+            "user"     : "pyutil",
+            "password" : "pyutil",
+            "database" : "pyutil_testdb"
+        }
+    }
+
+Set the environment variable S3REPO\_CONFIG to point at the previously created file
+Set PYTHONPATH to include the s3repo checkout
+
+$ export PYTHONPATH=...
+$ export S3REPO\_CONFIG=...
+$ python
+    >>> import s3repo
+    >>> s3repo.S3Repo().create_repository()
+
+#### Usage ####
+Typical usage of S3Repo will look something like this:
+
+    import s3repo
+
+    repo =s3repo.S3Repo()
+
+    rf = self.repo.add_file(file_type = 'story_data')
+    rf.touch("this is some data that I want to write in my file")
+    rf.publish()
+    repo.commit()
+
+#### State Management ####
+There are a variety of states that files can fall into:
+- Files which have not been flagged as published yet tend to be either new or transient files.  They will probably not hve md5 hashes or file sizes associated with them, and will be eventually purged if they're not ever published.
+- Files which have been published represent pieces of data that you want to keep around as being currently useful.  They will not ever be purged unless you later flag them as 'expired'.
+- Files which have been expired represent pieces of data that were previously useful, but have been superceded for one reason or another.
+
+#### S3 and Consistency ####
+First, it's worth understanding the difference between _eventual consistency_ and _read after write consistency_.  S3Repo is based around the concept of immutable files, which allows us to take advantage of _read after write consistency_ in certain S3 regions.  The short take away is that if the file is present to be downloaded, it is also complete.
+
+It is highly recommended that you create your S3 buckets in these region to take advantage.
 
 #### Disaster Recovery ####
 There are four possible disaster recovery scenarios, presented in order of likelihood.
@@ -21,21 +83,9 @@ Complete failure: upload s3 buckets from Glaicer or an external data store.  Res
 ##### Simultaneous Failure #####
 Welp.  I'm sure there's something clever to do here.
 
-#### S3 and Consistency ####
-First, it's worth understanding the difference between _eventual consistency_ and _read after write consistency_.
-
-S3Repo is based around the concept of immutable files, which allows us to take advantage of _read after write consistency_ in certain S3 regions.  It is highly recommended that you create your S3 buckets in these region to take advantage.
-
-S3Repo is based around the concept of immutable files.  This means that new versions 
-S3Repo is based around the concept of immutable files, and it is intended that files which are new versions of the fil
-
-
-S3Repo is based around the concept of immutable files, which means that read after write consistency (available everywhere but US Standard) is highly preferred.
-
 #### File States ####
 
 ##### Unpublished #####
-Unpublished files generally represent files which are new or transient.  They will not (or should not) have recorded file sizes or md5 hashes.  These files will be purged if they are not published in a configurable time period.
 
 ##### Published #####
 Published files are active and available for use.

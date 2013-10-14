@@ -299,12 +299,14 @@ class _RepoFile(DBTable):
         else:
             return open(self.local_path(), mode)
 
-    def touch(self):
+    def touch(self, contents = ""):
         """
         Ensures the repo file exists.
         """
         mkdirp(os.path.dirname(self.local_path()))
         with open(self.local_path(), 'a') as fp:
+            if contents:
+                fp.write(contents)
             fp.flush()
 
     def __repr__(self):
