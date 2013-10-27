@@ -6,7 +6,8 @@ from pyutil.util import *
 from pyutil.dateutil import *
 from s3util import *
 
-class DBTestCase(AssertSQLMixin, unittest.TestCase):
+class DBTestCase(TestCase):
+    setup_database = True
     requires_online = False
     config = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
     db_info = config['database']
@@ -19,11 +20,8 @@ class DBTestCase(AssertSQLMixin, unittest.TestCase):
 
     def setUp(self):
         super(DBTestCase, self).setUp()
-        set_now(now())
         if not self.requires_online:
             set_online(False)
-
-        self.setup_connections()
 
         try:
             shutil.rmtree(self.config['local_root'])
@@ -41,7 +39,6 @@ class DBTestCase(AssertSQLMixin, unittest.TestCase):
 
     def tearDown(self):
         super(DBTestCase, self).tearDown()
-        self.teardown_connections()
 
         if is_online():
             # We need to clear out all the S3 objects

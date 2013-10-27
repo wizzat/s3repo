@@ -1,12 +1,10 @@
-import os, shutil, md5, uuid, socket, subprocess, gzip
-import json
-import psycopg2
-import boto
-from boto.s3.key import Key, compute_md5
+import os, shutil, md5, uuid, socket, subprocess, gzip, boto
+import ujson as json
 from pyutil.pghelper import *
 from pyutil.util import *
 from pyutil.dateutil import *
 from pyutil.decorators import *
+from boto.s3.key import Key, compute_md5
 
 __all__ = [
     'RepoError',
@@ -80,6 +78,7 @@ class S3Repo(object):
         return self
 
     def destroy_repository(self):
+        import psycopg2
         execute(self.db_conn, "DROP TABLE IF EXISTS s3_repo")
         self.db_conn.commit()
 
