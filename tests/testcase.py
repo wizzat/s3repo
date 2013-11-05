@@ -25,17 +25,15 @@ class DBTestCase(TestCase):
 
         try:
             shutil.rmtree(self.config['local_root'])
-        except (OSError, IOError):
+        except (OSError, IOError), e:
             pass
 
-        execute(self.conn, "DROP TABLE IF EXISTS s3_repo")
-        self.conn.commit()
+        self.repo = S3Repo()
+        self.repo.create_repository(False)
+        self.repo.commit()
 
-        try:
-            execute(self.conn, "DROP SEQUENCE s3_repo_seq")
-            self.conn.commit()
-        except psycopg2.ProgrammingError:
-            self.conn.commit()
+        execute(self.conn, 'truncate table s3_repo, s3_tags, s3_repo_tags')
+        self.conn.commit()
 
     def tearDown(self):
         super(DBTestCase, self).tearDown()
