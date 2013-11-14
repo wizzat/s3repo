@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+import s3repo
+
+repo = s3repo.S3Repo().create_repository()
+repo.commit()

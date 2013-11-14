@@ -48,7 +48,11 @@ class FileTagsTest(DBTestCase):
         rf.tag_date(coerce_date('2013-04-24 01:02:03')) # Hour is is the default
         rf.commit()
 
-        self.assert_tags(
+        self.assertSqlResults(self.conn, """
+            SELECT *
+            FROM s3_tags
+            ORDER BY tag_id
+        """,
             [ 'tag_id',                    ],
             [ 'day=2013-04-24',            ],
             [ 'hour=2013-04-24 01:00:00',  ],
@@ -68,7 +72,6 @@ class FileTagsTest(DBTestCase):
             [ 'month=2013-04-01',          ],
             [ 'week=2013-04-22',           ],
         )
-
 
     def test_day_tagging_files__creates_tags(self):
         rf = self.repo.add_file()

@@ -5,32 +5,29 @@ from pyutil.util import *
 from pyutil.dateutil import *
 from pyutil.decorators import *
 from boto.s3.key import Key, compute_md5
+from s3exceptions import *
 
 __all__ = [
-    'RepoError',
-    'RepoAlreadyExistsError',
-    'RepoFileNotUploadedError',
-    'RepoFileAlreadyExistsError',
-    'RepoDownloadError',
-    'RepoUploadError',
-    'PurgingPublishedRecordError',
     'S3Repo',
+    'raw_cfg',
 ]
 
-class RepoError(Exception): pass
-class RepoAlreadyExistsError(RepoError): pass
-class RepoNoBackupsError(RepoError): pass
-class RepoFileNotUploadedError(RepoError): pass
-class RepoFileAlreadyExistsError(RepoError): pass
-class RepoFileDoesNotExistLocallyError(RepoError): pass
-class RepoUploadError(RepoError): pass
-class RepoDownloadError(RepoError): pass
-class PurgingPublishedRecordError(RepoError): pass
+def raw_cfg():
+    path = first_existing_path(
+        os.environ.get('S3_REPO_CFG', None),
+        '~/.s3_repo_cfg',
+    )
+
+    if not path:
+        raise NoConfigurationError()
+
+    with open(path, 'r') as fp:
+        return json.load(fp)
 
 class S3Repo(object):
     def __init__(self):
         self.s3_buckets = {}
-        self.config     = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
+        self.config     = raw_cfg()
         self.db_mgr     = ConnMgr(**self.config['database'])
         self.db_conn    = self.db_mgr.getconn("conn")
         self.s3_conn    = boto.connect_s3(

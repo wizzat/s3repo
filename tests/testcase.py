@@ -1,4 +1,4 @@
-import unittest, psycopg2, json, os, s3repo, shutil, boto
+import unittest, psycopg2, json, os, s3repo, shutil, boto, os.path
 from s3repo import S3Repo
 from pyutil.pghelper import *
 from pyutil.testutil import *
@@ -9,7 +9,7 @@ from s3util import *
 class DBTestCase(TestCase):
     setup_database = True
     requires_online = False
-    config = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
+    config = s3repo.raw_cfg()
     db_info = config['database']
 
     conn = None

@@ -1,12 +1,12 @@
-from pyutil.util import slurp
 import boto, json, os
+from s3repo import raw_cfg
 
 __all__ = [
     'list_bucket',
     'put_string',
 ]
 
-config = json.loads(slurp(os.environ['S3CACHE_CONFIG']))
+config = raw_cfg()
 s3_conn = boto.connect_s3(
     config['s3_access_key'],
     config['s3_secret_key'],

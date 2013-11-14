@@ -1,7 +1,7 @@
 #!/bin/bash
 find . -name '*pyc' | xargs rm -f
 export TESTDB=pyutil_testdb
-export S3CACHE_CONFIG=$PWD/.test_config
+export S3_REPO_CFG=~/.test_s3_repo_cfg
 export PYTHONPATH=$PWD
 
 dropdb pyutil_testdb
