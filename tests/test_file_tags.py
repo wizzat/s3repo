@@ -8,8 +8,8 @@ class FileTagsTest(DBTestCase):
     requires_online = False
 
     def test_tagging_files(self):
-        rf1 = self.repo.add_file(s3_key = 'abc')
-        rf2 = self.repo.add_file(s3_key = 'def')
+        rf1 = self.repo.add_file(s3_key = 'abc', date_published = now())
+        rf2 = self.repo.add_file(s3_key = 'def', date_published = now())
         rf1.tag('imported', 'processed')
         self.repo.commit()
 
@@ -27,8 +27,8 @@ class FileTagsTest(DBTestCase):
         )
 
     def test_untagging_files(self):
-        rf1 = self.repo.add_file(s3_key = 'abc')
-        rf2 = self.repo.add_file(s3_key = 'def')
+        rf1 = self.repo.add_file(s3_key = 'abc', date_published = now())
+        rf2 = self.repo.add_file(s3_key = 'def', date_published = now())
         rf1.tag('imported', 'processed')
         rf2.tag('imported', 'processed')
         self.repo.commit()
@@ -44,7 +44,7 @@ class FileTagsTest(DBTestCase):
         )
 
     def test_hour_tagging_files_is_default(self):
-        rf = self.repo.add_file()
+        rf = self.repo.add_file(date_published = now())
         rf.tag_date(coerce_date('2013-04-24 01:02:03')) # Hour is is the default
         rf.commit()
 
@@ -61,7 +61,7 @@ class FileTagsTest(DBTestCase):
         )
 
     def test_hour_tagging_files__creates_tags(self):
-        rf = self.repo.add_file()
+        rf = self.repo.add_file(date_published = now())
         rf.tag_date(coerce_date('2013-04-24 01:02:03'), type='hour')
         rf.commit()
 
@@ -74,7 +74,7 @@ class FileTagsTest(DBTestCase):
         )
 
     def test_day_tagging_files__creates_tags(self):
-        rf = self.repo.add_file()
+        rf = self.repo.add_file(date_published = now())
         rf.tag_date(coerce_date('2013-04-24 01:02:03'), type='day')
         rf.commit()
 
@@ -86,7 +86,7 @@ class FileTagsTest(DBTestCase):
         )
 
     def test_week_tagging_files__creates_tags(self):
-        rf = self.repo.add_file()
+        rf = self.repo.add_file(date_published = now())
         rf.tag_date(coerce_date('2013-04-24 01:02:03'), type='week')
         rf.commit()
 
@@ -96,7 +96,7 @@ class FileTagsTest(DBTestCase):
         )
 
     def test_month_tagging_files__creates_tags(self):
-        rf = self.repo.add_file()
+        rf = self.repo.add_file(date_published = now())
         rf.tag_date(coerce_date('2013-04-24 01:02:03'), type='month')
         rf.commit()
 
@@ -106,7 +106,7 @@ class FileTagsTest(DBTestCase):
         )
 
     def setup_default_tag_files(self):
-        rfs = [ self.repo.add_file() for x in xrange(4) ]
+        rfs = [ self.repo.add_file(date_published = now()) for x in xrange(4) ]
         rfs[0].tag('imported', 'processed', 'archived')
         rfs[1].tag('imported', 'processed')
         rfs[2].tag('processed', 'restored', 'restricted')

@@ -231,7 +231,6 @@ class S3Repo(object):
         all_ct      = ""
         exclude_ct  = ""
         filter_hint = ""
-        from_table  = "s3_repo_tags rt"
 
         if all:
             all_ct = "AND sum(CASE WHEN tag_id IN %(all_tags)s THEN 1 ELSE 0 END) = %(num_all_tags)s"
@@ -242,17 +241,16 @@ class S3Repo(object):
         if exclude:
             exclude_ct = "AND sum(case when tag_id in %(exclude_tags)s then 1 else 0 end) = 0"
 
-        if exclude and not all and not any:
-            from_table = "s3_repo r left outer join s3_repo_tags rt using (file_no)"
-
         if any or all:
             filter_hint = "AND tag_id IN %(tags)s"
 
         query = """
             SELECT file_no
-            FROM {from_table}
+            FROM s3_repo r
+                LEFT OUTER JOIN s3_repo_tags rt USING (file_no)
                 LEFT OUTER JOIN s3_tags USING (tag_no)
-            WHERE true
+            WHERE r.date_published IS NOT NULL
+                AND r.date_expired IS NULL
                 {filter_hint}
             GROUP BY file_no
             HAVING true
@@ -264,7 +262,6 @@ class S3Repo(object):
             all_ct      = all_ct,
             exclude_ct  = exclude_ct,
             filter_hint = filter_hint,
-            from_table  = from_table,
         )
 
         results = fetch_results(self.db_conn, query,
