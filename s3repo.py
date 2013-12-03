@@ -1,5 +1,4 @@
 import os, shutil, md5, uuid, socket, subprocess, gzip, boto
-import ujson as json
 from pyutil.pghelper import *
 from pyutil.util import *
 from pyutil.dateutil import *
@@ -12,17 +11,12 @@ __all__ = [
     'raw_cfg',
 ]
 
+@memoize()
 def raw_cfg():
-    path = first_existing_path(
+    return load_json_paths(
         os.environ.get('S3_REPO_CFG', None),
         '~/.s3_repo_cfg',
     )
-
-    if not path:
-        raise NoConfigurationError()
-
-    with open(path, 'r') as fp:
-        return json.load(fp)
 
 class S3Repo(object):
     def __init__(self):
@@ -105,6 +99,11 @@ class S3Repo(object):
         execute(self.db_conn, "CREATE UNIQUE INDEX unq_s3_bucket_key ON s3_repo (s3_bucket, s3_key)")
         self.db_conn.commit()
         return self
+
+    def flush_repository(self):
+        execute(self.db_conn, """
+            TRUNCATE TABLE s3_repo_tags, s3_tags, s3_repo;
+        """)
 
     def destroy_repository(self):
         import psycopg2
