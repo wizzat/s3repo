@@ -1,9 +1,9 @@
 import tempfile, md5, zlib, base64
+from s3repo.exceptions import *
 from s3repo import *
 from pyutil.testutil import *
 from pyutil.dateutil import *
 from pyutil.util import *
-from s3exceptions import *
 from testcase import *
 
 class RemoteFileMgmtTest(DBTestCase):

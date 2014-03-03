@@ -4,7 +4,7 @@ from pyutil.util import *
 from pyutil.dateutil import *
 from pyutil.decorators import *
 from boto.s3.key import Key, compute_md5
-from s3exceptions import *
+from s3repo.exceptions import *
 
 __all__ = [
     'S3Repo',

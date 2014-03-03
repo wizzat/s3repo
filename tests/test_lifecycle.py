@@ -1,10 +1,10 @@
-from s3repo import S3Repo
+import unittest, psycopg2, json, os
+import s3repo
 from testcase import DBTestCase
 from pyutil.pghelper import *
 from pyutil.testutil import *
 from pyutil.dateutil import *
 from pyutil.util import *
-import unittest, psycopg2, json, os, s3repo
 
 class LifecycleTest(DBTestCase):
     def test_drop_and_create(self):
@@ -157,7 +157,7 @@ class LifecycleRemoteTest(DBTestCase):
 
         self.repo.destroy_repository()
         self.repo.commit()
-        self.repo = S3Repo()
+        self.repo = s3repo.S3Repo()
         self.repo.restore_db()
         self.repo.commit()
 

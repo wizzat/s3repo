@@ -1,10 +1,9 @@
 import unittest, psycopg2, json, os, s3repo, shutil, boto, os.path
-from s3repo import S3Repo
+from s3repo import S3Repo, raw_cfg
 from pyutil.pghelper import *
 from pyutil.pgtestutil import *
 from pyutil.util import *
 from pyutil.dateutil import *
-from s3util import *
 
 class DBTestCase(PgTestCase):
     setup_database = True
@@ -41,6 +40,18 @@ class DBTestCase(PgTestCase):
         if is_online():
             # We need to clear out all the S3 objects
             for bucket in { self.config['default_s3_bucket'], self.config['backup_s3_bucket'] }:
-                for key in list_bucket(bucket):
+                for key in self.list_bucket(bucket):
                     key.delete()
         reset_online()
+
+    def list_bucket(self, name, prefix=''):
+        """
+        Uses the generic S3 connection to list the contents of a bucket
+        """
+        return self.s3_conn.get_bucket(name).list(prefix)
+
+    def put_string(self, bucket, key, value):
+        bucket = self.s3_conn.get_bucket(bucket)
+        key = Key(bucket, key)
+        key.set_contents(value)
+

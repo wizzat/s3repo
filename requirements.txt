@@ -1,4 +1,7 @@
 boto==2.26.0
-ujson==1.33
+coverage==3.7.1
 psycopg2==2.5.2
 psycopg2cffi==2.5
+texttable==0.8.1
+tox==1.7.0
+ujson==1.33
