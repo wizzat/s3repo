@@ -1,2 +1,4 @@
-boto
-ujson
+boto==2.26.0
+ujson==1.33
+psycopg2==2.5.2
+psycopg2cffi==2.5

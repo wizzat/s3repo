@@ -1,12 +1,12 @@
 import unittest, psycopg2, json, os, s3repo, shutil, boto, os.path
 from s3repo import S3Repo
 from pyutil.pghelper import *
-from pyutil.testutil import *
+from pyutil.pgtestutil import *
 from pyutil.util import *
 from pyutil.dateutil import *
 from s3util import *
 
-class DBTestCase(TestCase):
+class DBTestCase(PgTestCase):
     setup_database = True
     requires_online = False
     config = s3repo.raw_cfg()
