@@ -1,57 +1,71 @@
-import unittest, psycopg2, json, os, s3repo, shutil, boto, os.path
-from s3repo import S3Repo, raw_cfg
+import unittest, shutil, tempfile, os
+import s3repo
+import s3repo.common
+import pyutil.pgtestutil
 from pyutil.pghelper import *
-from pyutil.pgtestutil import *
 from pyutil.util import *
 from pyutil.dateutil import *
+from pyutil.decorators import MemoizeResults
 
-class DBTestCase(PgTestCase):
+class DBTestCase(pyutil.pgtestutil.PgTestCase):
     setup_database = True
     requires_online = False
-    config = s3repo.raw_cfg()
-    db_info = config['database']
+    config = s3repo.common.load_cfg()
+    s3_conn = s3repo.common.s3_conn()
+    random_files = []
 
-    conn = None
-    s3_conn = boto.connect_s3(
-        config['s3_access_key'],
-        config['s3_secret_key'],
-    )
+    def conn(self, name = 'testconn'):
+        conn = s3repo.common.db_conn(name)
+        conn.autocommit = True
+
+        return conn
 
     def setUp(self):
         super(DBTestCase, self).setUp()
-        if not self.requires_online:
-            set_online(False)
 
-        try:
-            shutil.rmtree(self.config['local_root'])
-        except (OSError, IOError), e:
-            pass
+        execute(self.conn(), 'TRUNCATE TABLE s3_repo.hosts, s3_repo.tags, s3_repo.files, s3_repo.file_tags, s3_repo.path_tags, s3_repo.downloads')
 
-        self.repo = S3Repo()
-        self.repo.create_repository(False)
-        self.repo.commit()
+    def teardown_connections(self):
+        s3repo.common.db_mgr.rollback()
+        MemoizeResults.clear()
 
-        execute(self.conn, 'truncate table s3_repo, s3_tags, s3_repo_tags')
-        self.conn.commit()
+        for cache_obj in DBTable.__subclasses__():
+            cache_obj.clear_cache()
 
-    def tearDown(self):
-        super(DBTestCase, self).tearDown()
+        for filename in self.random_files:
+            swallow((OSError, IOError), lambda: os.unlink(filename))
 
         if is_online():
             # We need to clear out all the S3 objects
-            for bucket in { self.config['default_s3_bucket'], self.config['backup_s3_bucket'] }:
-                for key in self.list_bucket(bucket):
+            for bucket in { self.config['s3.default_bucket'], self.config['s3.backup_bucket'] }:
+                for key in self.s3_conn.get_bucket(bucket).list():
                     key.delete()
-        reset_online()
 
-    def list_bucket(self, name, prefix=''):
+    def s3_list_bucket(self, name, prefix=''):
         """
         Uses the generic S3 connection to list the contents of a bucket
         """
-        return self.s3_conn.get_bucket(name).list(prefix)
+        return [ x.name for x in self.s3_conn.get_bucket(name).list(prefix) ]
 
-    def put_string(self, bucket, key, value):
+    def s3_put_string(self, bucket, key, value):
         bucket = self.s3_conn.get_bucket(bucket)
         key = Key(bucket, key)
         key.set_contents(value)
 
+    def s3_get_string(self, bucket, key):
+        bucket = self.s3_conn.get_bucket(bucket)
+        key = Key(bucket, key)
+        key.get_contents()
+
+    def random_filename(self, contents = '', **kwargs):
+        mkdirp('/tmp/s3repo')
+        fp = tempfile.NamedTemporaryFile(
+            dir    = '/tmp/s3repo',
+            delete = False,
+            **kwargs
+        )
+
+        fp.write(contents)
+        self.random_files.append(fp.name)
+
+        return fp.name
