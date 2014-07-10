@@ -132,8 +132,9 @@ class S3Repo(object):
         exclude_tags = s3repo.tag.Tag.find_tag_ids(exclude or [])
         hint_tags    = all_tags + any_tags + exclude_tags
 
-        if exclude_tags:
-            assert all_tags or any_tags, "exclude requires any or all"
+        if exclude:
+            if not all_tags and not any_tags:
+                raise RepoAPIError("exclude requires any or all")
 
         where_filters  = [ 'true' ]
         having_filters = [ 'true' ]
@@ -165,8 +166,6 @@ class S3Repo(object):
             where_filter  = '\n    AND '.join(where_filters),
             having_filter = '\n    AND '.join(having_filters),
         )
-
-        print query
 
         return s3repo.file.RepoFile.find_by_sql(query,
             num_all_tags = len(all_tags),

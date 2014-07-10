@@ -8,7 +8,7 @@ from pyutil.testutil import *
 from pyutil.dateutil import *
 from pyutil.util import *
 
-class S3RepoTest(DBTestCase):
+class RepoTest(DBTestCase):
     def test_never_published_files_get_flushed(self):
         rf1 = S3Repo.add_file(self.random_filename(), s3_key = "abc")
         rf2 = S3Repo.add_file(self.random_filename(), s3_key = "def")
@@ -94,4 +94,5 @@ class S3RepoTest(DBTestCase):
     @skip_unfinished
     def test_cache_purge_using_atime(self):
         pass
+
 

@@ -1,4 +1,5 @@
 from s3repo import S3Repo
+from s3repo.exceptions import *
 from pyutil.testutil import *
 from pyutil.dateutil import *
 from pyutil.util import *
@@ -161,6 +162,10 @@ class FileTagsTest(DBTestCase):
 
         tagged_files = S3Repo.find_tagged(any = [ 'restored', 'archived' ], all = [ 'imported' ])
         self.assertEqual({ x.file_id for x in tagged_files }, { rfs[0].file_id })
+
+    def test_find_tagged__exclude(self):
+        with self.assertRaises(RepoAPIError):
+            S3Repo.find_tagged(exclude = [ 'imported' ])
 
     def assert_tags(self, *rows):
         self.assertSqlResults(self.conn(), """

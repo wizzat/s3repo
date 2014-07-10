@@ -3,6 +3,8 @@ class RepoError(Exception): pass
 class RepoInternalError(RepoError): pass
 
 class RepoExternalError(RepoError): pass
+class RepoAPIError(RepoError): pass
+
 class RepoNoBackupsError(RepoExternalError): pass
 class RepoFileNotUploadedError(RepoExternalError): pass
 
