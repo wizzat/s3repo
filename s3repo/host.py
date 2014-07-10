@@ -1,6 +1,7 @@
 import socket
 import s3repo.common
 import pyutil.pghelper
+from pyutil.dateutil import *
 
 class RepoHost(pyutil.pghelper.DBTable):
     table_name = 's3_repo.hosts'
@@ -44,4 +45,26 @@ class RepoFileDownload(pyutil.pghelper.DBTable):
         'file_id',
         'host_id',
         'downloaded_utc',
+        'last_access',
     ]
+
+    @classmethod
+    def update_access_time(cls, rf):
+        rf = cls.find_or_create(rf.file_id, RepoHost.current_host_id(),
+            last_access    = now(),
+        )
+        rf.last_access = now()
+        rf.update()
+
+    @classmethod
+    def flag_download(cls, rf):
+        cls.find_or_create(rf.file_id, RepoHost.current_host_id(),
+            downloaded_utc = now(),
+            last_access    = now(),
+        )
+
+    @classmethod
+    def remove_download(cls, rf):
+        rf = cls.find_by_key(rf.file_id, RepoHost.current_host_id())
+        if rf:
+            rf.delete()

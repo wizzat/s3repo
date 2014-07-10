@@ -63,6 +63,7 @@ CREATE TABLE s3_repo.downloads (
     file_id        INTEGER NOT NULL REFERENCES s3_repo.files(file_id),
     host_id        INTEGER NOT NULL REFERENCES s3_repo.hosts(host_id),
     downloaded_utc TIMESTAMP NOT NULL,
+    last_access    TIMESTAMP NOT NULL,
     --
     PRIMARY KEY (file_id, host_id)
 );

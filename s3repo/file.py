@@ -90,6 +90,10 @@ class RepoFile(pyutil.pghelper.DBTable):
     def local_path(self):
         return LocalPath.find_by_id(self.path_id).local_path
 
+    def after_insert(self):
+        super(RepoFile, self).after_insert()
+        s3repo.host.RepoFileDownload.flag_download(self)
+
     def publish(self):
         if self.date_expired or not self.published:
             self.published = True
@@ -126,14 +130,14 @@ class RepoFile(pyutil.pghelper.DBTable):
         if self.published:
             raise s3repo.exceptions.PurgingPublishedRecordError()
 
-        assert len(self.delete()) ==  1
-
         if is_online():
             remote_bucket = s3repo.common.s3_conn().get_bucket(self.s3_bucket())
             remote_key = Key(remote_bucket, self.s3_key)
             remote_bucket.delete_key(remote_key)
 
-        swallow(OSError, lambda: os.unlink(self.local_path()))
+        self.unlink()
+        assert len(self.delete()) ==  1
+
 
     def download(self):
         """
@@ -155,6 +159,16 @@ class RepoFile(pyutil.pghelper.DBTable):
             if real_md5 != self.md5:
                 raise s3repo.exceptions.RepoDownloadError()
 
+        s3repo.host.RepoFileDownload.flag_download(self)
+
+    def unlink(self):
+        """
+        Remove the file from the local cache
+        """
+        s3repo.host.RepoFileDownload.remove_download(self)
+        if os.path.exists(self.local_path()):
+            os.unlink(self.local_path())
+
     def open(self, mode='r'):
         """
         Returns a file pointer to the current file.
@@ -163,6 +177,8 @@ class RepoFile(pyutil.pghelper.DBTable):
             self.download()
         elif mode == 'w':
             mkdirp(os.path.dirname(self.local_path()))
+
+        s3repo.host.RepoFileDownload.update_access_time(self)
 
         if self.s3_key.endswith(".gz"):
             return gzip.open(self.local_path(), mode)

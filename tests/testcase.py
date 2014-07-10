@@ -22,8 +22,18 @@ class DBTestCase(pyutil.pgtestutil.PgTestCase):
 
     def setUp(self):
         super(DBTestCase, self).setUp()
+        tables = [
+            's3_repo.hosts',
+            's3_repo.s3_buckets',
+            's3_repo.tags',
+            's3_repo.paths',
+            's3_repo.files',
+            's3_repo.file_tags',
+            's3_repo.path_tags',
+            's3_repo.downloads',
+        ]
 
-        execute(self.conn(), 'TRUNCATE TABLE s3_repo.hosts, s3_repo.tags, s3_repo.files, s3_repo.file_tags, s3_repo.path_tags, s3_repo.downloads')
+        execute(self.conn(), 'TRUNCATE TABLE {} CASCADE'.format(','.join(tables)))
 
     def teardown_connections(self):
         s3repo.common.db_mgr.rollback()

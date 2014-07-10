@@ -2,6 +2,7 @@ import os, uuid
 import s3repo.common
 import s3repo.host
 import s3repo.file
+import s3repo.tag
 from s3repo.exceptions import *
 from pyutil.dateutil import *
 from pyutil.util import set_defaults
@@ -60,6 +61,7 @@ class S3Repo(object):
             cls.config['backup.local.path'],
             table_obj.table_name,
         )
+        local_path += '.gz'
 
         backup_bucket = s3repo.common.s3_conn().get_bucket(cls.config['backup.s3_bucket'])
         remote_backup_files = backup_bucket.list(local_path)
@@ -75,6 +77,16 @@ class S3Repo(object):
         with gzip.open(fp.name, 'r') as fp:
             conn.cursor().copy_from(fp, table_obj.table_name, columns = table_obj.fields)
 
+    backup_objs = [
+        s3repo.file.RepoFile,
+        s3repo.file.LocalPath,
+        s3repo.file.S3Bucket,
+        s3repo.host.RepoHost,
+        s3repo.host.RepoFileDownload,
+        s3repo.tag.Tag,
+        s3repo.tag.RepoFileTag,
+        s3repo.tag.RepoPathTag,
+    ]
 
     @classmethod
     def backup_db(cls, conn):
@@ -84,9 +96,8 @@ class S3Repo(object):
         Ensures that no more than config['num_backups'] exist.
         """
 
-        raise NotImplemented()
         backup_files = []
-        for table_obj in []:
+        for table_obj in self.backup_objs:
             backup_files.append(cls.backup_table(conn, table_obj))
 
         for backup_file in backup_files:
@@ -97,9 +108,9 @@ class S3Repo(object):
         """
         Queries config['backup_s3_bucket']/s3repo_backups and restores the latest backup.
         """
-        for table_obj in []:
+
+        for table_obj in self.backup_objs:
             cls.restore_table(conn, table_obj)
-        raise NotImplemented()
 
     @classmethod
     def cleanup_unpublished_files(cls):
@@ -121,7 +132,14 @@ class S3Repo(object):
         """
         Recursively examines config['local_root'] and unlinks files which have been accessed more than config['local_atime_limit'] minutes ago.
         """
-        raise NotImplemented()
+        files = s3repo.host.RepoFileDownload.find_by(
+            host_id = RepoHost.current_host(),
+        )
+
+        files = filter(lambda x: x.last_access < self.config['fs.local_atime_limit'])
+        for rf in files:
+            rf.unlink()
+
 
     @classmethod
     def find_tagged(cls, any = None, all = None, exclude = None, published = True):

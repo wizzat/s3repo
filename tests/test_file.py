@@ -224,3 +224,33 @@ class FileTest(DBTestCase):
             [ 'f2',      True,         t1,                ],
             [ 'f3',      True,         t2,                ],
         )
+
+    def test_open_updates_access_time(self):
+        set_now('2014-04-04 01:02:03')
+        rf1 = S3Repo.add_file(self.random_filename(), s3_key = 'f1')
+        S3Repo.commit()
+
+        current_host_id = host.RepoHost.current_host_id()
+
+        self.assertSqlResults(self.conn(), """
+            SELECT *
+            FROM s3_repo.downloads
+            ORDER BY last_access
+        """,
+            [ 'file_id',    'host_id',        'last_access',          'downloaded_utc',       ],
+            [ rf1.file_id,  current_host_id,  '2014-04-04 01:02:03',  '2014-04-04 01:02:03',  ],
+        )
+
+        set_now('2014-04-05 01:02:03')
+        rf1.open()
+        S3Repo.commit()
+
+        self.assertSqlResults(self.conn(), """
+            SELECT *
+            FROM s3_repo.downloads
+            ORDER BY last_access
+        """,
+            [ 'file_id',    'host_id',        'last_access',          'downloaded_utc',       ],
+            [ rf1.file_id,  current_host_id,  '2014-04-05 01:02:03',  '2014-04-04 01:02:03',  ],
+        )
+

@@ -108,7 +108,6 @@ class RepoFileTag(pyutil.pghelper.DBTable):
             )
 
 
-
 class RepoPathTag(pyutil.pghelper.DBTable):
     table_name = 's3_repo.path_tags'
     conn       = s3repo.common.db_conn()
