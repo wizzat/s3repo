@@ -1,8 +1,10 @@
 CREATE SCHEMA s3_repo;
 
 CREATE TABLE s3_repo.hosts (
-    host_id SERIAL NOT NULL PRIMARY KEY,
-    hostname TEXT UNIQUE
+    host_id        SERIAL NOT NULL PRIMARY KEY,
+    hostname       TEXT UNIQUE,
+    max_cache_size BIGINT,
+    active         BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE s3_repo.s3_buckets (
@@ -41,7 +43,7 @@ CREATE TABLE s3_repo.files (
 );
 
 CREATE INDEX ON s3_repo.files (path_id);
-CREATE INDEX ON s3_repo.files (path_id, published) WHERE published = TRUE;
+CREATE INDEX ON s3_repo.files (path_id, published) WHERE published = TRUE AND date_expired IS NULL;
 
 CREATE TABLE s3_repo.file_tags (
     file_id     INTEGER NOT NULL REFERENCES s3_repo.files(file_id),
@@ -98,4 +100,37 @@ SELECT s3_repo.files.*, s3_repo.file_tags.tag_id, s3_repo.tags.tag_name
 FROM s3_repo.files
     INNER JOIN s3_repo.file_tags USING (file_id)
     INNER JOIN s3_repo.tags USING (tag_id)
+;
+
+CREATE OR REPLACE VIEW s3_repo.host_cache_stats AS
+SELECT
+    host_id                                   AS host_id,
+    total_size                                AS total_size,
+    s3_repo.hosts.max_cache_size              AS max_cache_size,
+    total_size - s3_repo.hosts.max_cache_size AS overflow_bytes
+FROM (
+    SELECT
+        host_id           AS host_id,
+        sum(rf.file_size) AS total_size
+    FROM s3_repo.files rf
+        INNER JOIN s3_repo.downloads
+            USING (file_id)
+    GROUP BY host_id
+    ) x INNER JOIN s3_repo.hosts
+            USING (host_id)
+;
+
+
+CREATE OR REPLACE VIEW s3_repo.deletable_files AS
+SELECT rf.*
+FROM s3_repo.files rf
+    LEFT OUTER JOIN (
+        SELECT *
+        FROM s3_repo.downloads dl
+            INNER JOIN s3_repo.hosts h
+                USING (host_id)
+        WHERE h.active
+    ) dl USING (file_id)
+WHERE dl.host_id IS NULL
+    AND NOT rf.published
 ;

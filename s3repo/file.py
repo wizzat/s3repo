@@ -3,6 +3,7 @@ import s3repo.common
 import s3repo.exceptions
 import s3repo.tag
 import pyutil.pghelper
+import pyutil.dbtable
 from boto.s3.key import Key, compute_md5
 from pyutil.decorators import memoize_property
 from pyutil.dateutil import *
@@ -10,7 +11,7 @@ from pyutil.util import *
 from pyutil.util import is_online, assert_online
 
 
-class S3Bucket(pyutil.pghelper.DBTable):
+class S3Bucket(pyutil.dbtable.DBTable):
     table_name = 's3_repo.s3_buckets'
     memoize    = True
     conn       = s3repo.common.db_conn()
@@ -25,7 +26,7 @@ class S3Bucket(pyutil.pghelper.DBTable):
         's3_bucket',
     ]
 
-class LocalPath(pyutil.pghelper.DBTable):
+class LocalPath(pyutil.dbtable.DBTable):
     table_name = 's3_repo.paths'
     conn       = s3repo.common.db_conn()
 
@@ -51,7 +52,7 @@ class LocalPath(pyutil.pghelper.DBTable):
             return results[0]
 
 
-class RepoFile(pyutil.pghelper.DBTable):
+class RepoFile(pyutil.dbtable.DBTable):
     table_name = 's3_repo.files'
     conn       = s3repo.common.db_conn()
 
@@ -136,8 +137,6 @@ class RepoFile(pyutil.pghelper.DBTable):
             remote_bucket.delete_key(remote_key)
 
         self.unlink()
-        assert len(self.delete()) ==  1
-
 
     def download(self):
         """

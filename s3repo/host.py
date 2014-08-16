@@ -1,9 +1,11 @@
 import socket
 import s3repo.common
 import pyutil.pghelper
+import pyutil.dbtable
+from pyutil.decorators import *
 from pyutil.dateutil import *
 
-class RepoHost(pyutil.pghelper.DBTable):
+class RepoHost(pyutil.dbtable.DBTable):
     table_name = 's3_repo.hosts'
     memoize    = True
     conn       = s3repo.common.db_conn()
@@ -16,6 +18,7 @@ class RepoHost(pyutil.pghelper.DBTable):
     fields = [
         'host_id',
         'hostname',
+        'max_cache_size',
     ]
 
     @classmethod
@@ -27,12 +30,11 @@ class RepoHost(pyutil.pghelper.DBTable):
         return cls.current_host().host_id
 
     def decomm(self):
-        for obj in RepoFileDownload.find_by(host_id = self.host_id):
-            obj.delete()
+        RepoFileDownload.purge_host(self.host_id)
         self.delete()
 
 
-class RepoFileDownload(pyutil.pghelper.DBTable):
+class RepoFileDownload(pyutil.dbtable.DBTable):
     table_name = 's3_repo.downloads'
     conn       = s3repo.common.db_conn()
 
@@ -68,3 +70,14 @@ class RepoFileDownload(pyutil.pghelper.DBTable):
         rf = cls.find_by_key(rf.file_id, RepoHost.current_host_id())
         if rf:
             rf.delete()
+
+    @classmethod
+    def purge_host(cls, host_id):
+        execute(cls.conn, """
+            DELETE FROM s3_repo.downloads
+            WHERE host_id = %(host_id)s
+        """, host_id = host_id)
+
+    @memoize_property
+    def repo_file(self):
+        return s3repo.file.RepoFile.find_by_id(self.file_id)

@@ -3,6 +3,7 @@ import s3repo.common
 import s3repo.host
 import s3repo.file
 import s3repo.tag
+from pyutil.pghelper import *
 from s3repo.exceptions import *
 from pyutil.dateutil import *
 from pyutil.util import set_defaults
@@ -113,33 +114,78 @@ class S3Repo(object):
             cls.restore_table(conn, table_obj)
 
     @classmethod
-    def cleanup_unpublished_files(cls):
-        """
-        Purges local files which have not been published
-        """
-        unpublished_files = s3repo.file.RepoFile.find_by(
-            origin         = s3repo.host.RepoHost.current_host_id(),
-            published      = False,
-            date_published = None,
+    def maintain_current_host(cls):
+        current_host = s3repo.host.RepoHost.current_host_id()
+        overflow_bytes = fetch_one(cls.conn, """
+            SELECT coalesce(overflow_bytes, 0) AS overflow_bytes
+            FROM s3_repo.host_cache_stats
+            WHERE host_id = %(host_id)s
+        """, host_id = current_host)['overflow_bytes']
+
+        stale_files = s3repo.file.RepoFile.find_by_sql("""
+            SELECT rf.*
+            FROM s3_repo.files rf
+                LEFT OUTER JOIN (
+                    SELECT *
+                    FROM s3_repo.downloads
+                    WHERE host_id = %(host_id)s
+                ) dl USING (file_id)
+            WHERE dl.last_access < %(stale_filter)s
+                OR (
+                    NOT published
+                    AND origin = %(host_id)s
+                    AND date_published IS NULL
+                    AND date_created < %(unpublished_filter)s
+                )
+        """,
+            host_id            = current_host,
+            stale_filter       = now() - seconds(cls.config['fs.published_stale_seconds']),
+            unpublished_filter = now() - seconds(cls.config['fs.unpublished_stale_seconds']),
         )
 
-        for rf in unpublished_files:
-            if rf.date_created < now() - hours(int(cls.config['unpublished.cleanup.hours'])):
+        for rf in stale_files:
+            overflow_bytes -= (rf.file_size or 0)
+            if rf.published:
+                rf.unlink()
+            else:
                 rf.purge()
 
+        if overflow_bytes > 0:
+            rfs = s3repo.file.RepoFile.find_by_sql("""
+                SELECT rf.*
+                FROM s3_repo.files rf
+                    LEFT OUTER JOIN s3_repo.downloads
+                        USING (file_id)
+                WHERE s3_repo.downloads.host_id = %(host_id)s
+                ORDER BY s3_repo.downloads.last_access
+            """, host_id = current_host)
+
+            while overflow_bytes > 0:
+                rf.unlink()
+                overflow_bytes += rf.file_size
+
     @classmethod
-    def cleanup_local_disk(cls):
-        """
-        Recursively examines config['local_root'] and unlinks files which have been accessed more than config['local_atime_limit'] minutes ago.
-        """
-        files = s3repo.host.RepoFileDownload.find_by(
-            host_id = RepoHost.current_host(),
-        )
+    def maintain_database(cls):
+        files_to_expire = s3repo.file.RepoFile.find_by_sql("""
+            SELECT rf.*
+            FROM s3_repo.files rf
+                LEFT OUTER JOIN s3_repo.current_files cf
+                    USING (file_id)
+            WHERE rf.published
+                AND rf.date_expired IS NULL
+                AND cf.file_id IS NULL
+        """)
 
-        files = filter(lambda x: x.last_access < self.config['fs.local_atime_limit'])
-        for rf in files:
-            rf.unlink()
+        for rf in files_to_expire:
+            rf.expire()
 
+        files_to_purge = s3repo.file.RepoFile.find_by_sql("""
+            SELECT *
+            FROM s3_repo.deletable_files
+        """)
+
+        for rf in files_to_purge:
+            rf.delete()
 
     @classmethod
     def find_tagged(cls, any = None, all = None, exclude = None, published = True):

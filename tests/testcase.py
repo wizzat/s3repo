@@ -2,6 +2,7 @@ import unittest, shutil, tempfile, os
 import s3repo
 import s3repo.common
 import pyutil.pgtestutil
+import pyutil.dbtable
 from pyutil.pghelper import *
 from pyutil.util import *
 from pyutil.dateutil import *
@@ -19,6 +20,9 @@ class DBTestCase(pyutil.pgtestutil.PgTestCase):
         conn.autocommit = True
 
         return conn
+
+    def commit(self):
+        s3repo.common.db_mgr.commit()
 
     def setUp(self):
         super(DBTestCase, self).setUp()
@@ -39,7 +43,7 @@ class DBTestCase(pyutil.pgtestutil.PgTestCase):
         s3repo.common.db_mgr.rollback()
         MemoizeResults.clear()
 
-        for cache_obj in DBTable.__subclasses__():
+        for cache_obj in pyutil.dbtable.DBTable.__subclasses__():
             cache_obj.clear_cache()
 
         for filename in self.random_files:

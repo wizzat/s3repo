@@ -1,9 +1,10 @@
 import s3repo.common
 import pyutil.pghelper
+import pyutil.dbtable
 from pyutil.pghelper import fetch_results, execute
 from pyutil.dateutil import *
 
-class Tag(pyutil.pghelper.DBTable):
+class Tag(pyutil.dbtable.DBTable):
     table_name = 's3_repo.tags'
     memoize    = True
     conn       = s3repo.common.db_conn()
@@ -50,7 +51,7 @@ class Tag(pyutil.pghelper.DBTable):
         return cls.find_tag_ids(tag_names)
 
 
-class RepoFileTag(pyutil.pghelper.DBTable):
+class RepoFileTag(pyutil.dbtable.DBTable):
     table_name = 's3_repo.file_tags'
     conn = s3repo.common.db_conn()
 
@@ -108,7 +109,7 @@ class RepoFileTag(pyutil.pghelper.DBTable):
             )
 
 
-class RepoPathTag(pyutil.pghelper.DBTable):
+class RepoPathTag(pyutil.dbtable.DBTable):
     table_name = 's3_repo.path_tags'
     conn       = s3repo.common.db_conn()
 

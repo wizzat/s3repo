@@ -7,4 +7,4 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 dropdb $TESTDB
 createdb $TESTDB
 createuser pyutil 2> /dev/null
-cd tests && python -m unittest discover -fv . "test*$1*py"
+cd tests && python -m unittest discover -v . "test*$1*py"
