@@ -5,7 +5,7 @@ import s3repo.tag
 import pyutil.pghelper
 import pyutil.dbtable
 from boto.s3.key import Key, compute_md5
-from pyutil.decorators import memoize_property
+from pyutil.decorators import memoize
 from pyutil.dateutil import *
 from pyutil.util import *
 from pyutil.util import is_online, assert_online
@@ -83,11 +83,11 @@ class RepoFile(pyutil.dbtable.DBTable):
     def s3_path(self):
         return "s3://{}/{}".format(self.s3_bucket(), self.s3_key)
 
-    @memoize_property
+    @memoize(obj=True)
     def s3_bucket(self):
         return S3Bucket.find_by_id(self.s3_bucket_id).s3_bucket
 
-    @memoize_property
+    @memoize(obj=True)
     def local_path(self):
         return LocalPath.find_by_id(self.path_id).local_path
 

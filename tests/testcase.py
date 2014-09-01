@@ -1,14 +1,14 @@
 import unittest, shutil, tempfile, os
 import s3repo
 import s3repo.common
-import pyutil.pgtestutil
+import pyutil.testutil
 import pyutil.dbtable
 from pyutil.pghelper import *
 from pyutil.util import *
 from pyutil.dateutil import *
 from pyutil.decorators import MemoizeResults
 
-class DBTestCase(pyutil.pgtestutil.PgTestCase):
+class DBTestCase(pyutil.testutil.TestCase):
     setup_database = True
     requires_online = False
     config = s3repo.common.load_cfg()
